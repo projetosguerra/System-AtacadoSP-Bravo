@@ -42,7 +42,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             {/* Product Image */}
             <div className="aspect-[4/3] overflow-hidden rounded-t-lg">
                 <img
-                    src={product.imageUrl}
+                    src={product.imgUrl}
                     alt={product.nome}
                     className="w-full h-full object-cover"
                 />

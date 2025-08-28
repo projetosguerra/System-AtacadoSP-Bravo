@@ -48,6 +48,10 @@ export interface Products {
   nome: string;
   descricao: string;
   preco: number;
-  imageUrl: string;
+  imgUrl: string;
   unit: string;
+}
+
+export interface CartItem extends Products {
+  quantidade: number;
 }

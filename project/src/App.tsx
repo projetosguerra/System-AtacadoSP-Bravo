@@ -6,6 +6,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import ApprovalPanelPage from './pages/ApprovalPanelPage';
 import FinancialControlPage from './pages/FinancialControlPage';
 import CatalogPage from './pages/CatalogPage';
+import CartPage from './pages/CartPage';
 
 function App() {
   return (
@@ -21,6 +22,8 @@ function App() {
           <Route path="/controle-financeiro" element={<FinancialControlPage />} />
 
           <Route path="/catalogo-produtos" element={<CatalogPage />} />
+
+          <Route path="/carrinho" element={<CartPage />} />
         </Routes>
       </Layout>
     </BrowserRouter>
