@@ -48,6 +48,30 @@ export interface Products {
   nome: string;
   descricao: string;
   preco: number;
-  imageUrl: string;
+  imgUrl: string;
   unit: string;
+}
+
+export interface CartItem extends Products {
+  quantidade: number;
+}
+
+export interface OrderItem extends Products {
+  quantidade: number;
+  quantidadeOriginal: number; // Para controlar se houve alterações
+}
+
+export interface OrderDetail extends PedidoPendente {
+  itens: OrderItem[];
+  custoUnit: number;
+}
+
+export interface OrderItem extends Products {
+  quantidade: number;
+  quantidadeOriginal: number; // Para controlar se houve alterações
+}
+
+export interface OrderDetail extends PedidoPendente {
+  itens: OrderItem[];
+  custoUnit: number;
 }

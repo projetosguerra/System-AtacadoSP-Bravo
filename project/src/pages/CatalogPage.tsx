@@ -1,14 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import { mockProducts } from '../data/mockProducts';
+import { Products } from '../types';
 
 const CatalogPage: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState('Todos');
-
     const categories = ['Todos', 'Escritório', 'Limpeza', 'Informática', 'Papelaria'];
 
-    const filteredProducts = mockProducts;
+    const [products, setProducts] = useState<Products[]>([]);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+      const fetchProducts = async () => {
+        try {
+          const response = await fetch('http://localhost:4000/api/produtos'); 
+          if (!response.ok) {
+            throw new Error('A resposta da rede não foi bem-sucedida');
+          }
+          const data: Products[] = await response.json();
+          setProducts(data);
+        } catch (err: any) {
+          setError('Falha ao carregar produtos: ' + err.message);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchProducts();
+    }, []);
+    
+    if (isLoading) {
+      return <div className="text-center p-12">Carregando produtos...</div>;
+    }
+
+    if (error) {
+      return <div className="text-center p-12 text-red-600">Erro: {error}</div>;
+    }
+    
+    const filteredProducts = products;
 
     return (
         <div>
