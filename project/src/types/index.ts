@@ -55,3 +55,23 @@ export interface Products {
 export interface CartItem extends Products {
   quantidade: number;
 }
+
+export interface OrderItem extends Products {
+  quantidade: number;
+  quantidadeOriginal: number; // Para controlar se houve alterações
+}
+
+export interface OrderDetail extends PedidoPendente {
+  itens: OrderItem[];
+  custoUnit: number;
+}
+
+export interface OrderItem extends Products {
+  quantidade: number;
+  quantidadeOriginal: number; // Para controlar se houve alterações
+}
+
+export interface OrderDetail extends PedidoPendente {
+  itens: OrderItem[];
+  custoUnit: number;
+}

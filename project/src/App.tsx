@@ -7,6 +7,7 @@ import ApprovalPanelPage from './pages/ApprovalPanelPage';
 import FinancialControlPage from './pages/FinancialControlPage';
 import CatalogPage from './pages/CatalogPage';
 import CartPage from './pages/CartPage';
+import OrderDetailPage from './pages/OrderDetailPage';
 
 function App() {
   return (
@@ -24,6 +25,8 @@ function App() {
           <Route path="/catalogo-produtos" element={<CatalogPage />} />
 
           <Route path="/carrinho" element={<CartPage />} />
+
+          <Route path="/analise-pedido/:id" element={<OrderDetailPage />} />
         </Routes>
       </Layout>
     </BrowserRouter>
