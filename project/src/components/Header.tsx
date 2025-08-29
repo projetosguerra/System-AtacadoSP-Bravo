@@ -2,13 +2,24 @@ import React from 'react';
 import { Mail, Bell } from 'lucide-react';
 
 const Header = () => {
+  const opcoesDeData: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  };
+
+  const dataFormatada = new Intl.DateTimeFormat('pt-BR', opcoesDeData).format(new Date());
+
+  const dataFinal = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
+
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         {/* Welcome Section */}
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Bem-vindo, Pietro Guerra</h1>
-          <p className="text-gray-600">Hoje é Sexta-Feira, 22/08/2025</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Bem-vindo, Admin Atac São Paulo</h1>
+          <p className="text-gray-600">Hoje é {dataFinal}</p>
         </div>
 
         {/* User Section */}
@@ -25,7 +36,7 @@ const Header = () => {
           {/* User Profile */}
           <div className="flex items-center space-x-3">
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">Pietro Guerra</p>
+              <p className="text-sm font-medium text-gray-900">Admin Atac São Paulo</p>
               <p className="text-xs text-red-600">Conta Admin.</p>
             </div>
             <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center">
