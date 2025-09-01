@@ -4,8 +4,8 @@ export const mockUsers: User[] = [
   {
     id: 1,
     numeroSequencia: 1,
-    primeiroNome: 'Pietro',
-    ultimoNome: 'Guerra',
+    primeiroNome: 'Rafael',
+    ultimoNome: 'Silva',
     genero: 'Masculino',
     idFuncionario: '0246AHR',
     numeroTelefone: '08130000000',
@@ -15,8 +15,8 @@ export const mockUsers: User[] = [
   {
     id: 2,
     numeroSequencia: 2,
-    primeiroNome: 'Luciano',
-    ultimoNome: 'Lima',
+    primeiroNome: 'Pedro',
+    ultimoNome: 'Ferreira',
     genero: 'Masculino',
     idFuncionario: '0246AHR',
     numeroTelefone: '08130000000',

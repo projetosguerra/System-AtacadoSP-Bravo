@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import StatsCard from '../components/StatsCard';
 import VolumeChart from '../components/LineChart';
 import StatusChart from '../components/DonutChart';
 import ApprovalTable from '../components/ApprovalTable';
 import RecentActivities from '../components/RecentActivities';
-import { Clock, DollarSign, Package, AlertTriangle } from 'lucide-react';
+import { DollarSign, Package, AlertTriangle } from 'lucide-react';
 
 const DashboardPage = () => {
   const [novosPedidos, setNovosPedidos] = useState<number | string>('...');

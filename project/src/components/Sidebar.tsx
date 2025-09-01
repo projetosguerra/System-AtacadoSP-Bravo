@@ -11,6 +11,8 @@ import {
   Store
 } from 'lucide-react';
 
+import logoAtacadoSP from '../assets/Logomarca-AtacadoSP.png';
+
 const Sidebar = () => {
   const location = useLocation();
   const currentPath = location.pathname;
@@ -18,7 +20,6 @@ const Sidebar = () => {
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: CheckSquare, label: 'Painel de Aprovação', path: '/painel-aprovacao' },
-    { icon: Package, label: 'Pedidos', path: '/pedidos' },
     { icon: Users, label: 'Gerenciamento de Usuários', path: '/gerenciamento-usuarios' },
     { icon: DollarSign, label: 'Controle Financeiro', path: '/controle-financeiro' },
     { icon: FileText, label: 'Relatórios', path: '/relatorios' },
@@ -30,7 +31,7 @@ const Sidebar = () => {
       {/* Logo */}
       <div className="p-6 border-b border-gray-200">
         <div className='flex justify-center'>
-          <img src="/src/assets/Logomarca-AtacadoSP.png" alt="Logo Atacado São Paulo" />
+          <img src={logoAtacadoSP} alt="Logo Atacado São Paulo" />
         </div>
       </div>
 

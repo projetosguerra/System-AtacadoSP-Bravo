@@ -1,6 +1,4 @@
 import React from 'react';
-import Sidebar from '../components/Sidebar';
-import Header from '../components/Header';
 import KpiCard from '../components/KpiCard';
 import PendingOrdersTable from '../components/PendingOrdersTable';
 import { mockPedidos } from '../data/mockPedidos';

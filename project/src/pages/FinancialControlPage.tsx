@@ -3,8 +3,6 @@ import { ChevronDown, FileText, TrendingDown, DollarSign, Edit } from 'lucide-re
 import { UnitFinancials } from '../types';
 import { mockFinancialData } from '../data/mockFinancials';
 import EditLimitModal from '../components/EditLimitModal.tsx';
-import Sidebar from '../components/Sidebar';
-import Header from '../components/Header';
 
 const FinancialControlPage: React.FC = () => {
     const [selectedUnit, setSelectedUnit] = useState<UnitFinancials | null>(null);
@@ -60,7 +58,7 @@ const FinancialControlPage: React.FC = () => {
         <div className="space-y-6">
             <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
                 {/* Unit Selection */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                         Selecione uma Unidade Administrativa para começar
                     </h2>

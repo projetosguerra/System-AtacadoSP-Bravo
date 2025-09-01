@@ -1,12 +1,18 @@
 import express from 'express';
 import oracledb from 'oracledb';
-import cors from 'cors'; // Importa o CORS
+import cors from 'cors';
 import 'dotenv/config';
 
-oracledb.initOracleClient(); 
+try {
+  oracledb.initOracleClient();
+  console.log('Oracle Client inicializado em modo Thick com sucesso!');
+} catch (err) {
+  console.error('ERRO na inicialização do Oracle Client:', err);
+  process.exit(1);
+}
 
 const app = express();
-const PORT = 4000;
+const PORT = 8888;
 
 app.use(cors());
 
@@ -23,7 +29,12 @@ app.get('/api/produtos', async (_req, res) => {
     console.log('Conexão com o Oracle DB bem-sucedida!');
 
     const result = await connection.execute(
-      `SELECT DISTINCT P.CODPROD, P.CODAUXILIAR, F.ESPECIFICACAO AS DESCRICAO_PADRAO, P.PRECO
+      `SELECT DISTINCT 
+         P.CODPROD,
+         P.CODAUXILIAR,
+         P.DESCRICAO AS DESCRICAO_PADRAO,
+         NVL(I.PTABELA, 0) AS PRECO,
+         P.EMBALAGEM
        FROM PCPRODUT P, PCMARCA M, PCCATEGORIA CAT, PCSUBCATEGORIA SUB, PCCONTRATO C, PCCONTRATOI I, PCCLIENT CLI
        WHERE CLI.CODCLI = 27995
        AND C.CODCLI = CLI.CODCLI
@@ -36,15 +47,16 @@ app.get('/api/produtos', async (_req, res) => {
        ORDER BY P.CODPROD`
     );
 
-    if (result.rows) {
+    if (result.rows && result.metaData) {
       const produtos = (result.rows as any[][]).map((row) => {
         return {
           id: row[0],
           codigoAuxiliar: row[1],
           nome: row[2],
           preco: row[3],
-          imageUrl: `https://placehold.co/300x200/eeeeee/333333?text=Produto+${row[0]}`, // Placeholder
-          unit: 'UN' // Placeholder
+          unit: row[4],
+          descricao: `Descrição para ${row[2]}`,
+          imageUrl: `https://placehold.co/300x200/eeeeee/333333?text=Produto+${row[0]}`,
         };
       });
       res.json(produtos);
@@ -53,7 +65,7 @@ app.get('/api/produtos', async (_req, res) => {
     }
 
   } catch (err) {
-    console.error('Erro:', err);
+    console.error('ERRO AO BUSCAR PRODUTOS:', err);
     res.status(500).json({ error: 'Erro ao buscar produtos do banco de dados.' });
   } finally {
     if (connection) {

@@ -6,7 +6,7 @@ export interface User {
   genero: string;
   idFuncionario: string;
   numeroTelefone: string;
-  cargo: 'Gestor' | 'Aprovador' | 'Solicitante'; // Define os valores possíveis
+  cargo: 'Gestor' | 'Aprovador' | 'Solicitante';
   designacao: string;
 }
 
@@ -48,6 +48,30 @@ export interface Products {
   nome: string;
   descricao: string;
   preco: number;
-  imageUrl: string;
+  imgUrl: string;
   unit: string;
+}
+
+export interface CartItem extends Products {
+  quantidade: number;
+}
+
+export interface OrderItem extends Products {
+  quantidade: number;
+  quantidadeOriginal: number;
+}
+
+export interface OrderDetail extends PedidoPendente {
+  itens: OrderItem[];
+  custoUnit: number;
+}
+
+export interface OrderItem extends Products {
+  quantidade: number;
+  quantidadeOriginal: number; 
+}
+
+export interface OrderDetail extends PedidoPendente {
+  itens: OrderItem[];
+  custoUnit: number;
 }

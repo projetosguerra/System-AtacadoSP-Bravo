@@ -5,6 +5,13 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "pm2 start dist/server.js --name almoxarifado-api",
+    "stop": "pm2 stop almoxarifado-api",
+    "list": "pm2 list",
+    "logs": "pm2 logs almoxarifado-api",
+    "delete": "pm2 delete almoxarifado-api",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -21,7 +28,9 @@
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
     "@types/oracledb": "^6.9.1",
+    "pm2": "^6.0.8",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }
 }
