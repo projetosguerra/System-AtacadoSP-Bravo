@@ -79,6 +79,6 @@ app.get('/api/produtos', async (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`API Server rodando em http://localhost:${PORT}`);
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`API Server rodando EXCLUSIVAMENTE em http://localhost:${PORT}`);
 });

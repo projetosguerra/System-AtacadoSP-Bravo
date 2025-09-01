@@ -1,16 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import { mockProducts } from '../data/mockProducts';
+import { Products } from '../types';
 
 const CatalogPage: React.FC = () => {
-<<<<<<< Updated upstream
-    const [selectedCategory, setSelectedCategory] = useState('Todos');
-
-    const categories = ['Todos', 'Escritório', 'Limpeza', 'Informática', 'Papelaria'];
-
-    const filteredProducts = mockProducts;
-=======
 
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const categories = ['Todos', 'Escritório', 'Limpeza', 'Informática', 'Papelaria'];
@@ -22,8 +15,7 @@ const CatalogPage: React.FC = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
-        const response = await fetch(`${apiUrl}/api/produtos`);
+        const response = await fetch("/api/produtos");
         if (!response.ok) {
           throw new Error('A resposta da rede não foi bem-sucedida');
         }
@@ -41,7 +33,6 @@ const CatalogPage: React.FC = () => {
   if (isLoading) {
     return <div className="text-center p-12">Carregando produtos...</div>;
   }
->>>>>>> Stashed changes
 
   if (error) {
     return <div className="text-center p-12 text-red-600">Erro: {error}</div>;
