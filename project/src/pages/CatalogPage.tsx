@@ -4,10 +4,16 @@ import ProductCard from '../components/ProductCard';
 import { Products } from '../types';
 
 const CatalogPage: React.FC = () => {
+<<<<<<< HEAD
+=======
+<<<<<<< Updated upstream
+    const [selectedCategory, setSelectedCategory] = useState('Todos');
+>>>>>>> 47d0c63ddeb734216c517fb6ae42ff6ba83e788c
 
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const categories = ['Todos', 'Escritório', 'Limpeza', 'Informática', 'Papelaria'];
 
+<<<<<<< HEAD
   const [products, setProducts] = useState<Products[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +44,46 @@ const CatalogPage: React.FC = () => {
     return <div className="text-center p-12 text-red-600">Erro: {error}</div>;
   }
 
+=======
+    const filteredProducts = mockProducts;
+=======
+
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const categories = ['Todos', 'Escritório', 'Limpeza', 'Informática', 'Papelaria'];
+
+  const [products, setProducts] = useState<Products[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+        const response = await fetch(`${apiUrl}/api/produtos`);
+        if (!response.ok) {
+          throw new Error('A resposta da rede não foi bem-sucedida');
+        }
+        const data: Products[] = await response.json();
+        setProducts(data);
+      } catch (err: any) {
+        setError('Falha ao carregar produtos: ' + err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  if (isLoading) {
+    return <div className="text-center p-12">Carregando produtos...</div>;
+  }
+>>>>>>> Stashed changes
+
+  if (error) {
+    return <div className="text-center p-12 text-red-600">Erro: {error}</div>;
+  }
+
+>>>>>>> 47d0c63ddeb734216c517fb6ae42ff6ba83e788c
   const filteredProducts = products;
 
   return (

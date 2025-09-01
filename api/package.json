@@ -7,11 +7,15 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+<<<<<<< HEAD
     "start": "pm2 start dist/server.js --name almoxarifado-api",
     "stop": "pm2 stop almoxarifado-api",
     "list": "pm2 list",
     "logs": "pm2 logs almoxarifado-api",
     "delete": "pm2 delete almoxarifado-api",
+=======
+    "start": "node dist/server.js",
+>>>>>>> 47d0c63ddeb734216c517fb6ae42ff6ba83e788c
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
