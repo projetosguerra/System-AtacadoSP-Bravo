@@ -1,105 +1,108 @@
 import React, { useState } from 'react';
-import { Minus, Plus, ShoppingCart } from 'lucide-react';
-import { Products } from '../types';
+import { ShoppingCart, CheckCircle, Minus, Plus } from 'lucide-react';
+import { Product } from '../types';
+import { Link } from 'react-router-dom';
 
 interface ProductCardProps {
-    product: Products;
+    product: Product;
+    onAddToCart: (product: Product, quantity: number) => void;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-    const [quantity, setQuantity] = useState(1);
-
-    const handleDecrease = () => {
-        if (quantity > 1) {
-            setQuantity(quantity - 1);
-        }
-    };
-
-    const handleIncrease = () => {
-        setQuantity(quantity + 1);
-    };
-
-    const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = parseInt(e.target.value);
-        if (!isNaN(value) && value >= 1) {
-            setQuantity(value);
-        }
-    };
+const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
+    const [quantidade, setQuantidade] = useState(1);
+    const [added, setAdded] = useState(false);
 
     const handleAddToCart = () => {
-        console.log(`Adicionado: ${quantity}x ${product.nome}`);
+        onAddToCart(product, quantidade);
+        setAdded(true);
+        setTimeout(() => {
+            setAdded(false);
+        }, 3000);
     };
 
     const formatPrice = (price: number) => {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(price);
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
     };
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
-            {/* Product Image */}
-            <div className="aspect-[4/3] overflow-hidden rounded-t-lg">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden group">
+            <div className="aspect-[4/3] overflow-hidden relative">
                 <img
-                    src={product.imageUrl}
+                    src={product.imgUrl}
                     alt={product.nome}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </div>
 
-            {/* Product Info */}
-            <div className="p-4">
-                <h3 className="font-medium text-gray-900 text-sm mb-1 line-clamp-2">
-                    {product.nome}
-                </h3>
-                <p className="text-xs text-gray-600 mb-3 line-clamp-2">
-                    {product.descricao}
-                </p>
-
-                {/* Price */}
-                <div className="mb-4">
-                    <div className="text-lg font-bold text-green-600">
-                        {formatPrice(product.preco)}
-                    </div>
+            <div className="p-5 flex flex-col flex-grow">
+                <div className="flex-grow">
+                    <h3 className="font-semibold text-gray-900 text-base mb-2 line-clamp-2 leading-tight">{product.nome}</h3>
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">{product.descricao}</p>
                 </div>
 
-                {/* Quantity Controls */}
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center border border-gray-300 rounded-md">
-                        <button
-                            onClick={handleDecrease}
-                            className="p-1 hover:bg-gray-100 transition-colors rounded-l-md"
-                            disabled={quantity <= 1}
-                        >
-                            <Minus className="w-4 h-4 text-gray-600" />
-                        </button>
-                        <input
-                            type="number"
-                            value={quantity}
-                            onChange={handleQuantityChange}
-                            className="w-12 text-center text-sm border-0 focus:ring-0 py-1"
-                            min="1"
-                        />
-                        <button
-                            onClick={handleIncrease}
-                            className="p-1 hover:bg-gray-100 transition-colors rounded-r-md"
-                        >
-                            <Plus className="w-4 h-4 text-gray-600" />
-                        </button>
+                <div className="space-y-4">
+                    <div className='flex justify-between items-center mb-2'>
+                        <div className="text-center">
+                            <div className="text-base font-bold text-green-600 bg-green-50 inline-block px-3 py-1 rounded-lg">
+                                {formatPrice(product.preco)}
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-center">
+                            <div className="flex items-center justify-center gap-4 my-4">
+                                <button
+                                    onClick={() => setQuantidade(q => Math.max(1, q - 1))}
+                                    className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors"
+                                >
+                                    <Minus size={16} />
+                                </button>
+                                <input
+                                    type="number"
+                                    value={quantidade}
+                                    onChange={(e) => setQuantidade(Math.max(1, Number(e.target.value)))}
+                                    className="w-16 text-center font-bold text-lg border-x-0 border-t-0 border-b-2 border-gray-300 focus:ring-0 focus:border-blue-500"
+                                />
+                                <button
+                                    onClick={() => setQuantidade(q => q + 1)}
+                                    className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors"
+                                >
+                                    <Plus size={16} />
+                                </button>
+                            </div>
+                        </div>
                     </div>
+                    <div className="space-y-3">
+                        <div className="w-full">
+                            {!added ? (
+                                <button
+                                    onClick={handleAddToCart}
+                                    className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-medium text-sm transition-all duration-200 shadow-md hover:shadow-lg active:transform active:scale-95"
+                                >
+                                    <ShoppingCart size={18} />
+                                    Adicionar ao Carrinho
+                                </button>
+                            ) : (
+                                <div className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-medium text-sm shadow-md animate-pulse">
+                                    <CheckCircle size={18} />
+                                    <span>Adicionado com Sucesso!</span>
+                                </div>
+                            )}
+                        </div>
 
-                    {/* Add to Cart Button */}
-                    <button
-                        onClick={handleAddToCart}
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md flex items-center gap-1 text-sm font-medium transition-colors"
-                    >
-                        <Plus className="w-4 h-4" />
-                        <ShoppingCart className="w-4 h-4" />
-                    </button>
+                        {added && (
+                            <div className="text-center animate-fadeIn">
+                                <Link
+                                    to="/carrinho"
+                                    className="inline-flex items-center text-sm text-red-600 hover:text-red-800 font-medium hover:underline transition-colors duration-200"
+                                >
+                                    Ver Carrinho →
+                                </Link>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

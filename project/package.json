@@ -7,9 +7,16 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "pm2 start server.js --name almoxarifado-portal",
+    "stop": "pm2 stop almoxarifado-portal",
+    "list": "pm2 list",
+    "logs": "pm2 logs almoxarifado-portal",
+    "restart": "pm2 restart almoxarifado-portal",
+    "delete": "pm2 delete almoxarifado-portal"
   },
   "dependencies": {
+    "express": "^4.21.2",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -26,7 +33,9 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
+    "pm2": "^6.0.8",
     "postcss": "^8.4.35",
+    "serve": "^14.2.4",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",

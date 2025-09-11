@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import StatsCard from '../components/StatsCard';
 import VolumeChart from '../components/LineChart';
 import StatusChart from '../components/DonutChart';
 import ApprovalTable from '../components/ApprovalTable';
 import RecentActivities from '../components/RecentActivities';
-import { Clock, DollarSign, Package, AlertTriangle } from 'lucide-react';
+import { DollarSign, Package, AlertTriangle, Clock } from 'lucide-react';
 
 const DashboardPage = () => {
   const [novosPedidos, setNovosPedidos] = useState<number | string>('...');
@@ -26,11 +26,11 @@ const DashboardPage = () => {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <StatsCard
-          title="Novos Pedidos"
+          title="Pedidos Pendentes"
           value={novosPedidos.toString()}
-          subtitle="Quantidade de pedidos no dia de hoje"
-          icon={Package}
-          iconBgColor="bg-pink-500"
+          subtitle="50 a mais que o último registro"
+          icon={Clock}
+          iconBgColor="bg-yellow-500"
         />
         <StatsCard
           title="Valor total aprovado"

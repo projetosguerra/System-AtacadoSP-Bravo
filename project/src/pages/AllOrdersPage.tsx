@@ -1,0 +1,55 @@
+import React, { useState, useMemo } from 'react';
+import KpiCard from '../components/KpiCard';
+import OrdersHistoryTable from '../components/OrdersHistoryTable';
+import { HistoricalOrder, KpiData } from '../types';
+import { useData } from '../context/DataContext';
+
+const AllOrdersPage: React.FC = () => {
+    const { pedidosHistorico, isLoading } = useData();
+
+    const [searchTerm, setSearchTerm] = useState<string>('');
+    const [filterStatus, setFilterStatus] = useState<string>('todos');
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const itemsPerPage = 10;
+
+    const filteredOrders = useMemo(() => {
+        return pedidosHistorico
+            .filter(order => filterStatus === 'todos' || String(order.status) === filterStatus)
+            .filter(order => Object.values(order).some(value => String(value).toLowerCase().includes(searchTerm.toLowerCase())));
+    }, [pedidosHistorico, searchTerm, filterStatus]);
+
+    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+    const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    const kpiData: KpiData[] = [
+        { title: 'Total Processado', value: filteredOrders.length, subtitle: 'Pedidos aprovados e reprovados' },
+        { title: 'Total Aprovado', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(filteredOrders.filter(o => o.status === 1).reduce((sum, o) => sum + o.valorTotal, 0)), subtitle: 'Soma dos pedidos com status 1' },
+        { title: 'Taxa de Reprovação', value: `${filteredOrders.length > 0 ? ((filteredOrders.filter(o => o.status === 2).length / filteredOrders.length) * 100).toFixed(1) : 0}%`, subtitle: 'Pedidos com status 2' },
+        { title: 'Pedidos "Em Análise"', value: filteredOrders.filter(o => o.status === 3).length, subtitle: 'Pedidos com status 3' }
+    ];
+
+    if (isLoading) return <div className="p-8 text-center">A carregar histórico...</div>;
+
+    return (
+        <div className="space-y-6 p-8">
+            <h1 className="text-3xl font-bold text-gray-800">Histórico de Pedidos</h1>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {kpiData.map((kpi, index) => <KpiCard key={index} data={kpi} />)}
+            </div>
+            <OrdersHistoryTable
+                orders={paginatedOrders}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                filterStatus={filterStatus}
+                onFilterChange={setFilterStatus}
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalOrders={filteredOrders.length}
+                onPageChange={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+            />
+        </div>
+    );
+};
+
+export default AllOrdersPage;

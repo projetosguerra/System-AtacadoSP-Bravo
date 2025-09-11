@@ -1,22 +1,23 @@
 export interface User {
-  id: number;
+  codUsuario: number;
   numeroSequencia: number;
   primeiroNome: string;
   ultimoNome: string;
   genero: string;
   idFuncionario: string;
   numeroTelefone: string;
-  cargo: 'Gestor' | 'Aprovador' | 'Solicitante'; // Define os valores possíveis
-  designacao: string;
+  perfil: 'Admin' | 'Aprovador' | 'Solicitante';
+  email: string;
+  setor: string;
+  codSetor: number;
+  tipoUsuario: number;
+  ativo: boolean;
 }
 
-export interface PedidoPendente {
-  id: string;
-  data: string;
-  solicitante: string;
-  unidadeAdmin: string;
-  qtdItens: number;
-  valor: number;
+export interface Sector {
+  codSetor: number;
+  descricao: string;
+  saldo: number;
 }
 
 export interface KpiData {
@@ -27,27 +28,64 @@ export interface KpiData {
   trendValue?: string;
 }
 
-export interface LimitChangeLog {
-  data: string;
-  valorAnterior: number;
-  novoValor: number;
-  alteradoPor: string;
-}
-
 export interface UnitFinancials {
   id: string;
   nome: string;
   limiteTotal: number;
-  valorGasto: number;
   saldoDisponivel: number;
-  historico: LimitChangeLog[];
+  valorGasto: number;
+  historico: {
+    data: string;
+    valorAnterior: number;
+    novoValor: number;
+    alteradoPor: string;
+  }[];
 }
 
-export interface Products {
-  id: string;
+export interface Product {
+  id: number;
   nome: string;
   descricao: string;
   preco: number;
-  imageUrl: string;
+  imgUrl: string;
   unit: string;
+}
+
+export interface CartItem extends Product {
+  quantidade: number;
+}
+
+export interface PedidoPendente {
+  id: number;
+  data: string;
+  solicitante: string;
+  unidadeAdmin: string;
+  qtdItens: number;
+  valor: number;
+}
+
+export interface OrderItem extends Product {
+  quantidade: number;
+}
+
+export interface OrderDetail {
+  id: number;
+  data: string;
+  status: number;
+  solicitante: {
+    nome: string;
+    email: string;
+  };
+  unidadeAdmin: string;
+  itens: OrderItem[];
+}
+
+export interface HistoricalOrder {
+  id: number;
+  data: string;
+  status: number;
+  solicitante: string;
+  setor: string;
+  qtdItens: number;
+  valorTotal: number;
 }

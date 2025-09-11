@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, Filter, MoreHorizontal } from 'lucide-react';
 
 const tableData = [

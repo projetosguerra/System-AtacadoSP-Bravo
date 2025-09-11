@@ -1,71 +1,69 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  CheckSquare,
-  Package,
-  Users,
-  DollarSign,
-  FileText,
-  LogOut,
-  Store
-} from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { Home, Users, DollarSign, CheckSquare, ShoppingCart, FileText } from 'lucide-react';
+import logo from '../assets/Logomarca-AtacadoSP.png';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
-  const location = useLocation();
-  const currentPath = location.pathname;
+  const { currentUser } = useAuth(); 
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: CheckSquare, label: 'Painel de Aprovação', path: '/painel-aprovacao' },
-    { icon: Package, label: 'Pedidos', path: '/pedidos' },
-    { icon: Users, label: 'Gerenciamento de Usuários', path: '/gerenciamento-usuarios' },
-    { icon: DollarSign, label: 'Controle Financeiro', path: '/controle-financeiro' },
-    { icon: FileText, label: 'Relatórios', path: '/relatorios' },
-    { icon: Store, label: 'Catálogo de Produtos', path: '/catalogo-produtos' },
+  const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-3 p-3 rounded-lg transition-colors ${
+      isActive ? 'bg-gray-200 text-black-700 font-semibold' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+    }`;
+  
+  const adminMenu = [
+    { to: '/', icon: <Home size={24} />, label: 'Dashboard' },
+    { to: '/gerenciamento-usuarios', icon: <Users size={24} />, label: 'Gerenciamento de Usuários' },
+    { to: '/controle-financeiro', icon: <DollarSign size={24} />, label: 'Controle Financeiro' },
+    { to: '/painel-aprovacao', icon: <CheckSquare size={24} />, label: 'Painel de Aprovação' },
+    { to: '/catalogo-produtos', icon: <ShoppingCart size={24} />, label: 'Catálogo de Produtos' },
+    { to: '/todos-pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
   ];
 
+  const solicitanteMenu = [
+    { to: '/', icon: <Home size={24} />, label: 'Dashboard' },
+    { to: '/catalogo-produtos', icon: <ShoppingCart size={24} />, label: 'Catálogo de Produtos' },
+    { to: '/todos-pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
+  ];
+
+  const aprovadorMenu = [
+    { to: '/', icon: <Home size={24} />, label: 'Dashboard' },
+    { to: '/controle-financeiro', icon: <DollarSign size={24} />, label: 'Controle Financeiro' },
+    { to: '/painel-aprovacao', icon: <CheckSquare size={24} />, label: 'Painel de Aprovação' },
+    { to: '/catalogo-produtos', icon: <ShoppingCart size={24} />, label: 'Catálogo de Produtos' },
+    { to: '/todos-pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
+  ];
+
+  const getMenu = () => {
+    if (!currentUser) return [];
+    switch (currentUser.perfil) {
+      case 'Admin': return adminMenu;
+      case 'Aprovador': return aprovadorMenu;
+      case 'Solicitante': return solicitanteMenu;
+      default: return [];
+    }
+  };
+
+  const menuItems = getMenu();
+
   return (
-    <div className="w-64 bg-white border-r border-gray-200 h-screen flex flex-col">
-      {/* Logo */}
-      <div className="p-6 border-b border-gray-200">
-        <div className='flex justify-center'>
-          <img src="/src/assets/Logomarca-AtacadoSP.png" alt="Logo Atacado São Paulo" />
-        </div>
+    <aside className="w-64 bg-white shadow-md flex flex-col flex-shrink-0">
+      <div className="p-6 flex items-center justify-center border-b">
+        <img src={logo} alt="Logo Atacado São Paulo" className="h-12" />
       </div>
-
-      {/* Menu Items */}
-      <nav className="flex-1 p-4">
-        <ul className="space-y-2">
-          {menuItems.map((item, index) => (
-            <li key={index}>
-              <Link
-                to={item.path}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${currentPath === item.path
-                  ? 'bg-gray-100 text-gray-900 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-sm font-medium">{item.label}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      <nav className="flex-1 p-4 space-y-2">
+        {menuItems.map((item, index) => (
+          <NavLink key={index} to={item.to} className={navLinkClasses} end>
+            {item.icon}
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
       </nav>
-
-      {/* Logout */}
-      <div className="p-4 border-t border-gray-200">
-        <a
-          href="#"
-          className="flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Logout</span>
-        </a>
+      <div className="p-4 border-t">
       </div>
-    </div>
+    </aside>
   );
 };
 
 export default Sidebar;
+
