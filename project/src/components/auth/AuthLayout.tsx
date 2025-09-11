@@ -36,7 +36,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         <div className="hidden lg:block lg:w-1/2 bg-gray-50">
            {/* Placeholder para a imagem */}
            <div className="flex items-center justify-center h-full">
-                <img src="https://atacadosaopaulo.com/images/logo.png" alt="Placeholder" className="max-w-xs" />
+                <img src="../assets/Banner 1.png" alt="Placeholder" className="max-w-xs" />
            </div>
         </div>
       </div>

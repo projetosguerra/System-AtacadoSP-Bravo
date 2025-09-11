@@ -5,23 +5,23 @@ import { Input } from '../../components/ui/Input.tsx';
 import { Button } from '../../components/ui/Button.tsx';
 import { Checkbox } from '../../components/ui/Checkbox.tsx';
 import { ReCaptcha } from '../../components/ui/ReCaptcha.tsx';
-// import { useAuth } from '../../context/AuthContext.tsx'; // Será usado no futuro
+import { useAuth } from '../../context/AuthContext.tsx';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
-  // const { login } = useAuth(); // Função a ser implementada no AuthContext
+  const { login } = useAuth();
 
-  const [formData, setFormData] = useState({ username: '', password: '', rememberMe: false });
+  const [formData, setFormData] = useState({ email: '', password: '', rememberMe: false });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Login submetido:', formData);
-    // Aqui virá a chamada: await login(formData.username, formData.password);
+    await login(formData.email, formData.password);
   };
 
   return (
@@ -32,7 +32,7 @@ export const Login: React.FC = () => {
         <p className="text-gray-600 text-sm mb-2">Bem-vindo de volta!</p>
         <h2 className="text-2xl font-bold text-gray-900 mb-8">Por favor, faça Login</h2>
         <form onSubmit={handleSubmit}>
-          <Input label="Usuário" type="text" name="username" placeholder="Insira seu usuário" value={formData.username} onChange={handleInputChange} required />
+          <Input label="Email" type="email" name="email" placeholder="Insira seu email" value={formData.email} onChange={handleInputChange} required />
           <Input label="Senha" type="password" name="password" placeholder="••••••••••" value={formData.password} onChange={handleInputChange} showPasswordToggle required />
           <div className="flex items-center justify-between mb-6">
             <Checkbox label="Lembrar-me" name="rememberMe" checked={formData.rememberMe} onChange={handleInputChange} />

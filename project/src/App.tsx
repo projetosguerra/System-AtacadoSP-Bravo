@@ -6,13 +6,13 @@ import AppRoutes from './routes/AppRoutes';
 import AuthRoutes from './routes/AuthRoutes';
 
 const AppRouter = () => {
-  const { currentUser, loading } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  if (loading) {
+  if (isLoading) {
     return <div className="flex h-screen items-center justify-center bg-gray-100">Carregando sessão...</div>;
   }
 
-  return currentUser ? <AppRoutes /> : <AuthRoutes />;
+  return user ? <AppRoutes /> : <AuthRoutes />;
 };
 
 function App() {

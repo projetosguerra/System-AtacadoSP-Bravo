@@ -13,7 +13,8 @@ export const SignUp: React.FC<SignUpProps> = ({
   onNavigateToSignIn
 }) => {
   const [formData, setFormData] = useState({
-    username: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     stayConnected: false
@@ -49,11 +50,21 @@ export const SignUp: React.FC<SignUpProps> = ({
 
         <form onSubmit={handleSubmit}>
           <Input
-            label="Usuário"
+            label="Primeiro Nome"
             type="text"
-            name="username"
-            placeholder="Insira seu usuário"
-            value={formData.username}
+            name="firstName"
+            placeholder="Insira seu primeiro nome"
+            value={formData.firstName}
+            onChange={handleInputChange}
+            required
+          />
+
+          <Input
+            label="Último Nome"
+            type="text"
+            name="lastName"
+            placeholder="Insira seu último nome"
+            value={formData.lastName}
             onChange={handleInputChange}
             required
           />

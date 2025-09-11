@@ -1,17 +1,15 @@
 export interface User {
   codUsuario: number;
-  numeroSequencia: number;
   primeiroNome: string;
-  ultimoNome: string;
-  genero: string;
-  idFuncionario: string;
-  numeroTelefone: string;
-  perfil: 'Admin' | 'Aprovador' | 'Solicitante';
+  ultimoNome: string | null;
   email: string;
+  genero: string | null;
+  numeroTelefone: string | null;
+  idFuncionario: string | null;
+  tipoUsuario: number; 
+  perfil: 'Admin' | 'Aprovador' | 'Solicitante'; 
+  codSetor: number | null;
   setor: string;
-  codSetor: number;
-  tipoUsuario: number;
-  ativo: boolean;
 }
 
 export interface Sector {

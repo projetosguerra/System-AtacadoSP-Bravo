@@ -1,79 +1,81 @@
-import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 
 interface AuthContextType {
-  currentUser: User | null;
-  users: User[];
-  setCurrentUser: (user: User | null) => void;
-  refetchUsers: () => void;
-  loading: boolean;
-  error: string | null;
+  isAuthenticated: boolean;
+  user: User | null; // <-- Alterado aqui
+  register: (primeiro_nome: string, ultimo_nome: string, email: string, password: string) => Promise<void>;
+  login: (email: any, password: any) => Promise<void>;
+  logout: () => void;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
-  }
-  return context;
-};
-
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/usuarios'); 
-      if (!response.ok) {
-        throw new Error(`Falha na API: ${response.statusText}`);
-      }
-      const data: User[] = await response.json();
-      setUsers(data);
-
-      if (data.length > 0) {
-        const currentUserStillExists = data.some(user => user.codUsuario === currentUser?.codUsuario);
-        if (!currentUserStillExists) {
-            setCurrentUser(data[0]);
-        }
-      } else {
-        setCurrentUser(null);
-      }
-
-    } catch (err: any) {
-      console.error("Falha ao buscar usuários:", err);
-      setError(err.message);
-      setUsers([]); 
-      setCurrentUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentUser?.codUsuario]);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetchUsers();
-
+    const token = localStorage.getItem('authToken');
+    const userData = localStorage.getItem('userData');
+    if (token && userData) {
+      setUser(JSON.parse(userData));
+    }
+    setIsLoading(false);
   }, []);
 
-  const refetchUsers = () => {
-    fetchUsers();
-  };
-  
-  const handleSetCurrentUser = (user: User | null) => {
-    setCurrentUser(user);
+  const login = async (email: any, password: any) => {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Falha no login');
+    }
+
+    localStorage.setItem('authToken', data.token);
+    localStorage.setItem('userData', JSON.stringify(data.user));
+    setUser(data.user);
   };
 
-  const value = { currentUser, users, setCurrentUser: handleSetCurrentUser, refetchUsers, loading, error };
+  const register = async (primeiro_nome: any, ultimo_nome: any, email: any, password: any) => {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ primeiro_nome, ultimo_nome, email, senha: password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Falha no cadastro');
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    setUser(null);
+  };
+
+  const isAuthenticated = !!user && !!localStorage.getItem('authToken');
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, register, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

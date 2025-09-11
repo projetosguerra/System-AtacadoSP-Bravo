@@ -2,6 +2,11 @@ import express from 'express';
 import oracledb from 'oracledb';
 import cors from 'cors';
 import 'dotenv/config';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+
+import dotenv from 'dotenv';
+dotenv.config();
 
 console.log('--- [FASE 1 de 4] Início do arquivo server.ts ---');
 
@@ -71,6 +76,130 @@ const findOrCreateCartHeader = async (connection: oracledb.Connection, codUsuari
 };
 
 console.log('--- [FASE 2 de 4] Funções e configurações carregadas. Registrando rotas... ---');
+
+app.post('/api/auth/register', async (req, res) => {
+    const { primeiro_nome, ultimo_nome, email, senha } = req.body;
+    const codcli = 27995;
+
+    if (!primeiro_nome || !email || !senha) {
+        return res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios.' });
+    }
+
+    try {
+        const hashedPassword = await bcrypt.hash(senha, 10);
+
+        await withDatabase(async (connection) => {
+            const userExists = await connection.execute(
+                `SELECT CODUSUARIO FROM BRAMV_USUARIOS WHERE EMAIL = :email AND CODCLI = :codcli`,
+                { email, codcli }
+            );
+
+            if (userExists.rows && userExists.rows.length > 0) {
+                throw new Error('Este e-mail já está em uso.');
+            }
+
+            const result = await connection.execute(
+                `INSERT INTO BRAMV_USUARIOS (CODCLI, PRIMEIRO_NOME, ULTIMO_NOME, EMAIL, SENHA, TIPOUSUARIO) 
+                 VALUES (:codcli, :primeiro_nome, :ultimo_nome, :email, :senha, 3)`,
+                { 
+                    codcli, 
+                    primeiro_nome, 
+                    ultimo_nome: ultimo_nome || '',
+                    email, 
+                    senha: hashedPassword 
+                },
+                { autoCommit: true }
+            );
+
+            res.status(201).json({ success: true, message: 'Usuário criado com sucesso!' });
+        });
+    } catch (err: any) {
+        if (err.message.includes('já está em uso')) {
+            return res.status(409).json({ error: err.message });
+        }
+        console.error('ERRO AO REGISTRAR USUÁRIO:', err);
+        res.status(500).json({ error: 'Erro interno ao registrar o usuário.' });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const { email, senha } = req.body;
+    const codcli = 27995;
+
+    if (!email || !senha) {
+        return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
+    }
+
+    try {
+        await withDatabase(async (connection) => {
+            // Query com JOIN para buscar a descrição do setor
+            const query = `
+                SELECT 
+                    u.CODUSUARIO,
+                    u.PRIMEIRO_NOME,
+                    u.ULTIMO_NOME,
+                    u.EMAIL,
+                    u.SENHA,
+                    u.TIPOUSUARIO,
+                    u.CODSETOR,
+                    u.GENERO,
+                    u.TELEFONE,
+                    u.ID_FUNCIONARIO,
+                    s.DESCRICAO AS SETOR_DESCRICAO
+                FROM BRAMV_USUARIOS u
+                LEFT JOIN BRAMV_SETOR s ON u.CODSETOR = s.CODSETOR AND u.CODCLI = s.CODCLI
+                WHERE u.EMAIL = :email AND u.CODCLI = :codcli
+            `;
+            
+            const result = await connection.execute(query, { email, codcli });
+            
+            if (!result.rows || result.rows.length === 0) {
+                return res.status(401).json({ error: 'Credenciais inválidas.' });
+            }
+
+            const dbUser: any = result.rows[0];
+
+            const isPasswordValid = await bcrypt.compare(senha, dbUser.SENHA);
+
+            if (!isPasswordValid) {
+                return res.status(401).json({ error: 'Credenciais inválidas.' });
+            }
+            
+            // Monta o objeto 'user' exatamente como a interface do frontend espera
+            const userPayload = {
+                codUsuario: dbUser.CODUSUARIO,
+                primeiroNome: dbUser.PRIMEIRO_NOME,
+                ultimoNome: dbUser.ULTIMO_NOME,
+                email: dbUser.EMAIL,
+                tipoUsuario: dbUser.TIPOUSUARIO,
+                perfil: dbUser.TIPOUSUARIO === 1 ? 'Admin' : dbUser.TIPOUSUARIO === 2 ? 'Aprovador' : 'Solicitante',
+                codSetor: dbUser.CODSETOR,
+                setor: dbUser.SETOR_DESCRICAO || 'Não definido',
+                genero: dbUser.GENERO || '',
+                numeroTelefone: dbUser.TELEFONE || '',
+                idFuncionario: dbUser.ID_FUNCIONARIO || '',
+                // Campos que não estão no banco ainda, mas estão na interface
+                numeroSequencia: 0, 
+                ativo: true, 
+            };
+            
+            const token = jwt.sign(
+                { id: userPayload.codUsuario, nome: userPayload.primeiroNome, tipoUsuario: userPayload.tipoUsuario },
+                process.env.JWT_SECRET!,
+                { expiresIn: '8h' }
+            );
+
+            res.status(200).json({
+                success: true,
+                token,
+                user: userPayload // Envia o payload completo para o frontend
+            });
+        });
+    } catch (err: any) {
+        console.error('ERRO NO LOGIN:', err);
+        res.status(500).json({ error: 'Erro interno ao tentar fazer login.' });
+    }
+});
 
 app.get('/api/produtos', async (_req, res) => {
   console.log('Recebida requisição em /api/produtos');
