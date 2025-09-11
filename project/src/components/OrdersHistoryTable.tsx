@@ -30,7 +30,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   const statusMap = {
     1: { text: 'Aprovado', color: 'green' },
     2: { text: 'Reprovado', color: 'red' },
-    5: { text: 'Em Análise', color: 'yellow' }
   };
 
   const formatCurrency = (value: number) => {
@@ -92,7 +91,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
               <option value="todos">Todos</option>
               <option value="1">Aprovados</option>
               <option value="2">Reprovados</option>
-              <option value="5">Em Análise</option>
             </select>
           </div>
         </div>

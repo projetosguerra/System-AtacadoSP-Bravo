@@ -143,20 +143,9 @@ app.put('/api/pedido/:id/status', async (req, res) => {
 
             const updateResult = await connection.execute(sql, params);
             
-            if (updateResult.rowsAffected === 0) {
-                console.log(`Nenhuma linha afetada ao tentar mudar status do pedido ${id} para ${newStatus}`);
-            }
-            
-            if (newStatus === 1) {
-                const totalResult = await connection.execute(`SELECT SUM(QT * PVENDA) AS TOTAL FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id`, [id]);
-                const totalValue = (totalResult.rows![0] as any[])[0] || 0;
+            if (updateResult.rowsAffected === 0 && conditionStatus !== undefined) {
 
-                const setorResult = await connection.execute(`SELECT U.CODSETOR FROM BRAMV_PEDIDOC P JOIN BRAMV_USUARIOS U ON P.CODUSUARIO = U.CODUSUARIO WHERE P.NUMPEDRCA = :id`, [id]);
-                const codSetor = (setorResult.rows![0] as any[])[0];
-
-                if (codSetor) {
-                    await connection.execute(`UPDATE BRAMV_SETOR SET SALDO = SALDO - :totalValue WHERE CODSETOR = :codSetor`, [totalValue, codSetor]);
-                }
+                throw new Error('O status do pedido foi alterado por outro usuário. A página será atualizada.');
             }
 
             await connection.commit();

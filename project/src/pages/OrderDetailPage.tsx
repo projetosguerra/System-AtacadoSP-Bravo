@@ -34,17 +34,22 @@ const OrderDetailPage = () => {
       setIsLoading(true);
       setError(null);
       try {
+        // Tenta colocar o pedido em análise (status 3), mas apenas se ele estiver pendente (status 5)
         await updateStatusAPI(3, 5);
 
         const response = await fetch(`/api/pedido/${id}`);
-        if (!response.ok) throw new Error('Pedido não encontrado');
+        if (!response.ok) throw new Error('Pedido não encontrado ou já está em análise por outro usuário.');
         const data: OrderDetail = await response.json();
 
         if (isMounted) {
           setOrder(data);
         }
       } catch (err: any) {
-        if (isMounted) setError(err.message);
+        if (isMounted) {
+            setError(err.message);
+            // Se der erro, volta para a página anterior após um tempo
+            setTimeout(() => navigate('/painel-aprovacao'), 3000);
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -52,14 +57,16 @@ const OrderDetailPage = () => {
 
     fetchOrder();
 
+    // A função de limpeza agora é mais segura
     return () => {
       isMounted = false;
-      if (order?.status === 3 || order === null) {
+      // Apenas reverte o status se o pedido ainda estiver em análise (status 3)
+      if (order?.status === 3) {
         updateStatusAPI(5, 3);
       }
     };
-  }, [id, updateStatusAPI]);
-
+  }, [id, updateStatusAPI, navigate, order?.status]); // Adicione order?.status às dependências
+  
   const handleDecision = async (newStatus: number, _motivo?: string) => {
     if (order) setOrder({ ...order, status: newStatus });
 
