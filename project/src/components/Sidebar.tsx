@@ -1,10 +1,10 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Users, DollarSign, CheckSquare, ShoppingCart, FileText } from 'lucide-react';
+import { Home, Users, DollarSign, CheckSquare, ShoppingCart, FileText, LogOut } from 'lucide-react';
 import logo from '../assets/Logomarca-AtacadoSP.png';
 import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
-  const { currentUser } = useAuth(); 
+  const { user, logout } = useAuth();
 
   const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 p-3 rounded-lg transition-colors ${
@@ -17,13 +17,13 @@ const Sidebar = () => {
     { to: '/controle-financeiro', icon: <DollarSign size={24} />, label: 'Controle Financeiro' },
     { to: '/painel-aprovacao', icon: <CheckSquare size={24} />, label: 'Painel de Aprovação' },
     { to: '/catalogo-produtos', icon: <ShoppingCart size={24} />, label: 'Catálogo de Produtos' },
-    { to: '/todos-pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
+    { to: '/pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
   ];
 
   const solicitanteMenu = [
     { to: '/', icon: <Home size={24} />, label: 'Dashboard' },
     { to: '/catalogo-produtos', icon: <ShoppingCart size={24} />, label: 'Catálogo de Produtos' },
-    { to: '/todos-pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
+    { to: '/pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
   ];
 
   const aprovadorMenu = [
@@ -31,12 +31,12 @@ const Sidebar = () => {
     { to: '/controle-financeiro', icon: <DollarSign size={24} />, label: 'Controle Financeiro' },
     { to: '/painel-aprovacao', icon: <CheckSquare size={24} />, label: 'Painel de Aprovação' },
     { to: '/catalogo-produtos', icon: <ShoppingCart size={24} />, label: 'Catálogo de Produtos' },
-    { to: '/todos-pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
+    { to: '/pedidos', icon: <FileText size={24} />, label: 'Pedidos' },
   ];
 
   const getMenu = () => {
-    if (!currentUser) return [];
-    switch (currentUser.perfil) {
+    if (!user) return [];
+    switch (user.perfil) {
       case 'Admin': return adminMenu;
       case 'Aprovador': return aprovadorMenu;
       case 'Solicitante': return solicitanteMenu;
@@ -60,6 +60,13 @@ const Sidebar = () => {
         ))}
       </nav>
       <div className="p-4 border-t">
+        <button
+          onClick={logout}
+          className="flex items-center gap-3 p-3 rounded-lg transition-colors text-gray-600 hover:bg-red-50 hover:text-red-600 w-full"
+        >
+          <LogOut size={24} />
+          <span>Logout</span>
+        </button>
       </div>
     </aside>
   );

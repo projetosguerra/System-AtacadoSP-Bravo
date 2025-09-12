@@ -1,45 +1,75 @@
+// Em project/src/pages/auth/SignUp.tsx
+
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // Importe o useNavigate para redirecionar
 import { AuthLayout } from '../../components/auth/AuthLayout.tsx';
 import { Input } from '../../components/ui/Input.tsx';
 import { Button } from '../../components/ui/Button.tsx';
 import { Checkbox } from '../../components/ui/Checkbox.tsx';
 import { ReCaptcha } from '../../components/ui/ReCaptcha.tsx';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 interface SignUpProps {
   onNavigateToSignIn: () => void;
 }
 
-export const SignUp: React.FC<SignUpProps> = ({
-  onNavigateToSignIn
-}) => {
+export const SignUp: React.FC<SignUpProps> = ({ onNavigateToSignIn }) => {
+  const { register } = useAuth();
+  const navigate = useNavigate(); 
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     password: '',
-    stayConnected: false
+    stayConnected: false,
   });
+
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
-    console.log('Sign up submitted:', formData);
+    setError('');
+    setSuccess('');
+    setIsLoading(true);
+
+    try {
+      await register(
+        formData.firstName,
+        formData.lastName,
+        formData.email,
+        formData.password
+      );
+      
+      setSuccess('Cadastro realizado com sucesso! Redirecionando para o login...');
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+
+    } catch (err: any) {
+      setError(err.message || 'Ocorreu um erro. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <AuthLayout
       alternativeAction={{
-        text: '',
+        text: 'Já tem uma conta?',
         buttonText: 'Sign In',
-        onClick: onNavigateToSignIn
+        onClick: onNavigateToSignIn,
       }}
     >
       <div className="mt-8">
@@ -58,7 +88,6 @@ export const SignUp: React.FC<SignUpProps> = ({
             onChange={handleInputChange}
             required
           />
-
           <Input
             label="Último Nome"
             type="text"
@@ -68,7 +97,6 @@ export const SignUp: React.FC<SignUpProps> = ({
             onChange={handleInputChange}
             required
           />
-
           <Input
             label="Endereço de email"
             type="email"
@@ -78,7 +106,6 @@ export const SignUp: React.FC<SignUpProps> = ({
             onChange={handleInputChange}
             required
           />
-
           <Input
             label="Senha"
             type="password"
@@ -89,7 +116,6 @@ export const SignUp: React.FC<SignUpProps> = ({
             showPasswordToggle
             required
           />
-
           <div className="mb-6">
             <Checkbox
               label="Manter conectado"
@@ -98,11 +124,14 @@ export const SignUp: React.FC<SignUpProps> = ({
               onChange={handleInputChange}
             />
           </div>
-
           <ReCaptcha />
 
-          <Button type="submit" className="w-full">
-            Sign Up
+          {/* Exibe mensagens de erro ou sucesso */}
+          {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
+          {success && <p className="text-green-500 text-sm text-center mb-4">{success}</p>}
+
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? 'Cadastrando...' : 'Sign Up'}
           </Button>
         </form>
       </div>

@@ -1,55 +1,31 @@
-import { Bell, ShoppingCart, ChevronDown, User as UserIcon, RefreshCw } from 'lucide-react';
+import { Bell, ShoppingCart, ChevronDown, User as UserIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useEffect, useState } from 'react';
 
 const Header = () => {
   const { totalItems } = useCart();
-  const { currentUser, users, setCurrentUser: switchUser, refetchUsers, loading } = useAuth();
+  const { user, allUsers, fetchAllUsers, switchUserForTesting, isLoading } = useAuth();
+  const [isDropdownOpen, setDropdownOpen] = useState(false);
 
-  const handleUserChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedUserId = Number(event.target.value);
-    const selectedUser = users.find(u => u.codUsuario === selectedUserId) || null;
-    switchUser(selectedUser);
+  useEffect(() => {
+    if (!isLoading) {
+      fetchAllUsers();
+    }
+  }, [isLoading, fetchAllUsers]);
+
+  const handleUserSwitch = (codUsuario: number) => {
+    switchUserForTesting(codUsuario);
+    setDropdownOpen(false); 
   };
 
-  if (loading || !currentUser) {
-    return <div className="bg-white shadow-sm p-4 text-center">Carregando informações do usuário...</div>;
-  }
-
   return (
-    <header className="bg-white shadow-sm p-4 flex justify-between items-center">
+    <header className="flex items-center justify-between p-4 bg-white border-b">
       <div>
-        <h1 className="text-xl font-semibold text-gray-800">Bem-vindo(a), {currentUser.primeiroNome}!</h1>
-        <p className="text-sm text-gray-500">{currentUser.perfil} | {currentUser.setor}</p>
+        <h1 className="text-xl font-semibold">Dashboard</h1>
       </div>
-
       <div className="flex items-center space-x-6">
-        <div className="relative">
-          <UserIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600" />
-          <select
-            className="appearance-none bg-gray-100 border border-gray-300 rounded-md py-2 pl-9 pr-8 text-sm font-medium text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={currentUser.codUsuario}
-            onChange={handleUserChange}
-          >
-            {users.map(user => (
-              <option key={user.codUsuario} value={user.codUsuario}>
-                {user.primeiroNome} ({user.perfil})
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600" />
-        </div>
-
-        <button
-          onClick={refetchUsers}
-          className="p-2 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          title="Atualizar lista de usuários"
-        >
-          <RefreshCw size={18} />
-        </button>
-
-        <button className="text-gray-600 hover:text-gray-800"><Bell size={24} /></button>
         <Link to="/carrinho" className="relative text-gray-600 hover:text-gray-800">
           <ShoppingCart size={24} />
           {totalItems > 0 && (
@@ -58,10 +34,50 @@ const Header = () => {
             </span>
           )}
         </Link>
+        <button className="relative">
+          <Bell className="text-gray-600" />
+        </button>
+        <div className="relative">
+          <div 
+            className="flex items-center space-x-2 cursor-pointer"
+            onClick={() => setDropdownOpen(!isDropdownOpen)}
+          >
+            <div className="w-10 h-10 flex items-center justify-center bg-gray-200 rounded-full">
+              <UserIcon className="text-gray-500" />
+            </div>
+            <div>
+              <p className="font-semibold">
+                {user ? `${user.primeiroNome} ${user.ultimoNome}` : 'Carregando...'}
+              </p>
+              <p className="text-sm text-gray-500">
+                {user ? user.perfil : ''}
+              </p>
+            </div>
+            <ChevronDown className="text-gray-600" />
+          </div>
+
+          {/* Dropdown para troca de usuário */}
+          {isDropdownOpen && allUsers.length > 0 && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10">
+              <div className="py-1">
+                <p className="px-4 py-2 text-xs text-gray-400">Trocar para (teste):</p>
+                {allUsers.map((testUser) => (
+                  <button
+                    key={testUser.codUsuario}
+                    onClick={() => handleUserSwitch(testUser.codUsuario)}
+                    className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    disabled={user?.codUsuario === testUser.codUsuario} // Desabilita o usuário atual
+                  >
+                    {testUser.primeiroNome} ({testUser.perfil})
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
 };
 
 export default Header;
-

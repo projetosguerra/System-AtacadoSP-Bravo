@@ -1,50 +1,122 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthLayout } from '../../components/auth/AuthLayout.tsx';
-import { Input } from '../../components/ui/Input.tsx';
-import { Button } from '../../components/ui/Button.tsx';
-import { Checkbox } from '../../components/ui/Checkbox.tsx';
-import { ReCaptcha } from '../../components/ui/ReCaptcha.tsx';
-import { useAuth } from '../../context/AuthContext.tsx';
+import { AuthLayout } from '../../components/auth/AuthLayout';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { useAuth } from '../../context/AuthContext';
 
-export const Login: React.FC = () => {
-  const navigate = useNavigate();
+interface LoginProps {
+  onNavigateToSignUp: () => void;
+  onNavigateToForgotPassword: () => void;
+}
+
+export const Login: React.FC<LoginProps> = ({
+  onNavigateToSignUp,
+  onNavigateToForgotPassword,
+}) => {
   const { login } = useAuth();
+  const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({ email: '', password: '', rememberMe: false });
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    stayConnected: false,
+  });
+
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login submetido:', formData);
-    await login(formData.email, formData.password);
+    setError('');
+    setIsLoading(true);
+
+    console.log('Valores que serão enviados para o login:', { 
+        email: formData.email, 
+        password: formData.password 
+    });
+
+    try {
+      await login(formData.email, formData.password);
+
+      navigate('/'); // Redireciona para a página inicial após o login bem-sucedido
+
+    } catch (err: any) {
+      setError(err.message || 'Ocorreu um erro. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <AuthLayout
-      alternativeAction={{ text: '', buttonText: 'Sign Up', onClick: () => navigate('/signup') }}
+      alternativeAction={{
+        text: 'Não tem uma conta?',
+        buttonText: 'Sign Up',
+        onClick: onNavigateToSignUp,
+      }}
     >
       <div className="mt-8">
         <p className="text-gray-600 text-sm mb-2">Bem-vindo de volta!</p>
-        <h2 className="text-2xl font-bold text-gray-900 mb-8">Por favor, faça Login</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-8">
+          Faça seu login
+        </h2>
+
         <form onSubmit={handleSubmit}>
-          <Input label="Email" type="email" name="email" placeholder="Insira seu email" value={formData.email} onChange={handleInputChange} required />
-          <Input label="Senha" type="password" name="password" placeholder="••••••••••" value={formData.password} onChange={handleInputChange} showPasswordToggle required />
-          <div className="flex items-center justify-between mb-6">
-            <Checkbox label="Lembrar-me" name="rememberMe" checked={formData.rememberMe} onChange={handleInputChange} />
-            <button type="button" onClick={() => navigate('/forgot-password')} className="text-sm text-green-600 hover:text-green-700 transition-colors">
-              Esqueci minha senha
+          <Input
+            label="Endereço de email"
+            type="email"
+            name="email"
+            placeholder="Insira seu email"
+            value={formData.email}
+            onChange={handleInputChange}
+            required
+          />
+
+          <Input
+            label="Senha"
+            type="password"
+            name="password"
+            placeholder="••••••••••"
+            value={formData.password}
+            onChange={handleInputChange}
+            showPasswordToggle
+            required
+          />
+
+          <div className="flex justify-between items-center mb-6">
+            <Checkbox
+              label="Manter conectado"
+              name="stayConnected"
+              checked={formData.stayConnected}
+              onChange={handleInputChange}
+            />
+            <button
+              type="button"
+              onClick={onNavigateToForgotPassword}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Esqueceu a senha?
             </button>
           </div>
-          <ReCaptcha />
-          <Button type="submit" className="w-full">Sign In</Button>
+          
+          {/* Exibe mensagens de erro */}
+          {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
+
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? 'Entrando...' : 'Sign In'}
+          </Button>
         </form>
       </div>
     </AuthLayout>
   );
 };
-

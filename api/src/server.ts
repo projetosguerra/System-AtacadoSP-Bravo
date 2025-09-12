@@ -1,12 +1,11 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import oracledb from 'oracledb';
 import cors from 'cors';
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-
-import dotenv from 'dotenv';
-dotenv.config();
 
 console.log('--- [FASE 1 de 4] Início do arquivo server.ts ---');
 
@@ -98,11 +97,21 @@ app.post('/api/auth/register', async (req, res) => {
                 throw new Error('Este e-mail já está em uso.');
             }
 
-            const result = await connection.execute(
-                `INSERT INTO BRAMV_USUARIOS (CODCLI, PRIMEIRO_NOME, ULTIMO_NOME, EMAIL, SENHA, TIPOUSUARIO) 
-                 VALUES (:codcli, :primeiro_nome, :ultimo_nome, :email, :senha, 3)`,
+            const maxCodResult = await connection.execute(
+                `SELECT NVL(MAX(CODUSUARIO), 0) + 1 AS NEXT_CODUSUARIO FROM BRAMV_USUARIOS`
+            );
+            
+            if (!maxCodResult.rows || maxCodResult.rows.length === 0) {
+                throw new Error('Não foi possível gerar um novo número de usuário.');
+            }
+            const nextCodUsuario = (maxCodResult.rows[0] as any)[0];
+
+            await connection.execute(
+                `INSERT INTO BRAMV_USUARIOS (CODCLI, CODUSUARIO, PRIMEIRO_NOME, ULTIMO_NOME, EMAIL, SENHA, TIPOUSUARIO) 
+                 VALUES (:codcli, :codusuario, :primeiro_nome, :ultimo_nome, :email, :senha, 1)`, // Padrão 1: ADMIN
                 { 
                     codcli, 
+                    codusuario: nextCodUsuario,
                     primeiro_nome, 
                     ultimo_nome: ultimo_nome || '',
                     email, 
@@ -132,26 +141,17 @@ app.post('/api/auth/login', async (req, res) => {
 
     try {
         await withDatabase(async (connection) => {
-            // Query com JOIN para buscar a descrição do setor
             const query = `
                 SELECT 
-                    u.CODUSUARIO,
-                    u.PRIMEIRO_NOME,
-                    u.ULTIMO_NOME,
-                    u.EMAIL,
-                    u.SENHA,
-                    u.TIPOUSUARIO,
-                    u.CODSETOR,
-                    u.GENERO,
-                    u.TELEFONE,
-                    u.ID_FUNCIONARIO,
+                    u.CODUSUARIO, u.PRIMEIRO_NOME, u.ULTIMO_NOME, u.EMAIL, u.SENHA,
+                    u.TIPOUSUARIO, u.CODSETOR, u.GENERO, u.TELEFONE, u.ID_FUNCIONARIO,
                     s.DESCRICAO AS SETOR_DESCRICAO
                 FROM BRAMV_USUARIOS u
                 LEFT JOIN BRAMV_SETOR s ON u.CODSETOR = s.CODSETOR AND u.CODCLI = s.CODCLI
                 WHERE u.EMAIL = :email AND u.CODCLI = :codcli
             `;
             
-            const result = await connection.execute(query, { email, codcli });
+            const result = await connection.execute(query, { email, codcli }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
             
             if (!result.rows || result.rows.length === 0) {
                 return res.status(401).json({ error: 'Credenciais inválidas.' });
@@ -159,13 +159,19 @@ app.post('/api/auth/login', async (req, res) => {
 
             const dbUser: any = result.rows[0];
 
-            const isPasswordValid = await bcrypt.compare(senha, dbUser.SENHA);
+            const senhaHash = dbUser.SENHA;
+
+            if (!senhaHash) {
+                console.error('Objeto recebido do DB não contém a propriedade SENHA. Chaves disponíveis:', Object.keys(dbUser));
+                throw new Error('Coluna de senha não encontrada no resultado da consulta.');
+            }
+
+            const isPasswordValid = await bcrypt.compare(senha, senhaHash);
 
             if (!isPasswordValid) {
                 return res.status(401).json({ error: 'Credenciais inválidas.' });
             }
             
-            // Monta o objeto 'user' exatamente como a interface do frontend espera
             const userPayload = {
                 codUsuario: dbUser.CODUSUARIO,
                 primeiroNome: dbUser.PRIMEIRO_NOME,
@@ -178,7 +184,6 @@ app.post('/api/auth/login', async (req, res) => {
                 genero: dbUser.GENERO || '',
                 numeroTelefone: dbUser.TELEFONE || '',
                 idFuncionario: dbUser.ID_FUNCIONARIO || '',
-                // Campos que não estão no banco ainda, mas estão na interface
                 numeroSequencia: 0, 
                 ativo: true, 
             };
@@ -192,7 +197,7 @@ app.post('/api/auth/login', async (req, res) => {
             res.status(200).json({
                 success: true,
                 token,
-                user: userPayload // Envia o payload completo para o frontend
+                user: userPayload
             });
         });
     } catch (err: any) {
@@ -421,6 +426,7 @@ app.post('/api/carrinho/:codusuario/submit', async (req, res) => {
 });
 
 app.get('/api/usuarios', async (_req, res) => {
+  const codcli = 27995; // Código do cliente fixo
   try {
     const users = await withDatabase(async (connection) => {
       const result = await connection.execute<{ [key: string]: any }>(

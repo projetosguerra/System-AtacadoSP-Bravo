@@ -7,7 +7,15 @@ import { EmailVerification } from '../pages/auth/EmailVerification.tsx';
 const AuthRoutes = () => {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route
+        path="/login"
+        element={
+          <Login
+            onNavigateToSignUp={() => { window.location.href = '/signup'; }}
+            onNavigateToForgotPassword={() => { window.location.href = '/forgot-password'; }}
+          />
+        }
+      />
       <Route
         path="/signup"
         element={

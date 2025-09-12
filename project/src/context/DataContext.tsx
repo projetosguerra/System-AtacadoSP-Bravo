@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { PedidoPendente, HistoricalOrder } from '../types'; // Importa os dois tipos
+import { PedidoPendente, HistoricalOrder } from '../types';
 
 interface DataContextType {
   pedidosPendentes: PedidoPendente[];

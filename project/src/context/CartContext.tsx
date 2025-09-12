@@ -24,18 +24,18 @@ export const useCart = () => {
 };
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const { refetchAllData } = useData();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchCart = useCallback(async () => {
-    if (!currentUser) return;
+    if (!user) return;
     setIsLoading(true);
     error && setError(null);
     try {
-      const response = await fetch(`/api/carrinho/${currentUser.codUsuario}`);
+      const response = await fetch(`/api/carrinho/${user.codUsuario}`);
       if (!response.ok) throw new Error('Falha ao carregar carrinho da API.');
       const data: CartItem[] = await response.json();
       setCartItems(data);
@@ -45,19 +45,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser]);
+  }, [user]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (user) {
       fetchCart();
     } else {
       setCartItems([]);
     }
-  }, [currentUser, fetchCart]);
+  }, [user, fetchCart]);
 
   const addToCart = (product: Product, quantity: number) => {
-    if (!currentUser) return;
-    
+    if (!user) return;
+
     const originalCart = [...cartItems];
     const existingItem = originalCart.find(item => item.id === product.id);
 
@@ -69,7 +69,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setCartItems([...originalCart, { ...product, quantidade: quantity }]);
     }
 
-    fetch(`/api/carrinho/${currentUser.codUsuario}/items`, {
+    fetch(`/api/carrinho/${user.codUsuario}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codprod: product.id, qt: quantity, pvenda: product.preco }),
@@ -81,13 +81,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const removeFromCart = (productId: number) => {
-    if (!currentUser) return;
+    if (!user) return;
 
     const originalCart = [...cartItems];
    
     setCartItems(originalCart.filter(item => item.id !== productId));
 
-    fetch(`/api/carrinho/${currentUser.codUsuario}/items/${productId}`, {
+    fetch(`/api/carrinho/${user.codUsuario}/items/${productId}`, {
       method: 'DELETE',
     }).catch(err => {
       console.error("Falha otimista ao remover item:", err);
@@ -97,7 +97,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateQuantity = (productId: number, newQuantity: number) => {
-    if (!currentUser || newQuantity < 1) return;
+    if (!user || newQuantity < 1) return;
 
     const originalCart = [...cartItems];
 
@@ -105,7 +105,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       item.id === productId ? { ...item, quantidade: newQuantity } : item
     ));
 
-    fetch(`/api/carrinho/${currentUser.codUsuario}/items/${productId}`, {
+    fetch(`/api/carrinho/${user.codUsuario}/items/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qt: newQuantity }),
@@ -117,9 +117,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const submitCart = async () => {
-    if (!currentUser) return;
+    if (!user) return;
     try {
-      const response = await fetch(`/api/carrinho/${currentUser.codUsuario}/submit`, { method: 'POST' });
+      const response = await fetch(`/api/carrinho/${user.codUsuario}/submit`, { method: 'POST' });
       if (!response.ok) throw new Error('Falha ao submeter pedido.');
       setCartItems([]);
       await refetchAllData();
