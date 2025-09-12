@@ -18,8 +18,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
   onLogoClick
 }) => {
   return (
-    <div className="min-h-screen bg-white flex">
-      <div className="w-full lg:w-1/2 flex flex-col">
+    <div className="flex h-screen overflow-hidden">
+      <div className="w-full lg:w-1/2 flex flex-col overflow-y-auto">
         <header className="flex justify-between items-center p-6">
           <div
             className="cursor-pointer"
