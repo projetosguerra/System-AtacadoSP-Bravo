@@ -77,7 +77,7 @@ const findOrCreateCartHeader = async (connection: oracledb.Connection, codUsuari
 console.log('--- [FASE 2 de 4] Funções e configurações carregadas. Registrando rotas... ---');
 
 app.post('/api/auth/register', async (req, res) => {
-    const { primeiro_nome, ultimo_nome, email, senha } = req.body;
+    const { primeiro_nome, ultimo_nome, email, senha, genero, telefone } = req.body;
     const codcli = 27995;
 
     if (!primeiro_nome || !email || !senha) {
@@ -107,15 +107,17 @@ app.post('/api/auth/register', async (req, res) => {
             const nextCodUsuario = (maxCodResult.rows[0] as any)[0];
 
             await connection.execute(
-                `INSERT INTO BRAMV_USUARIOS (CODCLI, CODUSUARIO, PRIMEIRO_NOME, ULTIMO_NOME, EMAIL, SENHA, TIPOUSUARIO) 
-                 VALUES (:codcli, :codusuario, :primeiro_nome, :ultimo_nome, :email, :senha, 1)`, // Padrão 1: ADMIN
+                `INSERT INTO BRAMV_USUARIOS (CODCLI, CODUSUARIO, PRIMEIRO_NOME, ULTIMO_NOME, EMAIL, SENHA, TIPOUSUARIO, GENERO, TELEFONE) 
+                 VALUES (:codcli, :codusuario, :primeiro_nome, :ultimo_nome, :email, :senha, 3, :genero, :telefone)`,
                 { 
                     codcli, 
                     codusuario: nextCodUsuario,
                     primeiro_nome, 
                     ultimo_nome: ultimo_nome || '',
                     email, 
-                    senha: hashedPassword 
+                    senha: hashedPassword,
+                    genero: genero || null,
+                    telefone: telefone || null
                 },
                 { autoCommit: true }
             );

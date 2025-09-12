@@ -21,7 +21,7 @@ export const Input: React.FC<InputProps> = ({
   const inputType = showPasswordToggle && showPassword ? 'text' : type;
 
   return (
-    <div className="mb-4">
+    <div className="mb-3">
       <label className="block text-sm font-medium text-gray-700 mb-1.5">
         {label}
       </label>
@@ -38,13 +38,13 @@ export const Input: React.FC<InputProps> = ({
             props.onBlur?.(e);
           }}
           className={`
-            w-full px-4 py-3 border rounded-lg transition-all duration-200
+            w-full px-4 py-2.5 lg:py-3 border rounded-lg transition-all duration-200
             ${isFocused 
               ? 'border-green-500 ring-2 ring-green-100 outline-none' 
               : 'border-gray-300 hover:border-gray-400'
             }
             ${error ? 'border-red-500 ring-2 ring-red-100' : ''}
-            placeholder-gray-400 text-gray-900
+            placeholder-gray-400 text-gray-900 text-sm lg:text-base
             ${className}
           `}
         />
@@ -54,7 +54,7 @@ export const Input: React.FC<InputProps> = ({
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
           >
-            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         )}
       </div>

@@ -47,14 +47,16 @@ export const Login: React.FC<LoginProps> = ({
 
     try {
       await login(formData.email, formData.password);
-
-      navigate('/'); // Redireciona para a página inicial após o login bem-sucedido
-
+      navigate('/');
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro. Tente novamente.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLogoClick = () => {
+    navigate('/login');
   };
 
   return (
@@ -64,6 +66,7 @@ export const Login: React.FC<LoginProps> = ({
         buttonText: 'Sign Up',
         onClick: onNavigateToSignUp,
       }}
+      onLogoClick={handleLogoClick}
     >
       <div className="mt-8">
         <p className="text-gray-600 text-sm mb-2">Bem-vindo de volta!</p>
@@ -109,7 +112,6 @@ export const Login: React.FC<LoginProps> = ({
             </button>
           </div>
           
-          {/* Exibe mensagens de erro */}
           {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={isLoading}>

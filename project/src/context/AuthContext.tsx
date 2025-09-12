@@ -7,10 +7,11 @@ interface AuthContextType {
   allUsers: User[];  
   isLoading: boolean;
   login: (email: any, password: any) => Promise<void>;
-  register: (primeiro_nome: string, ultimo_nome: string, email: string, password: string) => Promise<void>;
+  register: (primeiro_nome: string, ultimo_nome: string, email: string, password: string, genero: string, telefone: string) => Promise<void>;
   logout: () => void;
   fetchAllUsers: () => Promise<void>; 
   switchUserForTesting: (codUsuario: number) => void; 
+  error?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,11 +44,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(data.user);
   };
 
-  const register = async (primeiro_nome: string, ultimo_nome: string, email: string, password: string) => {
+  const register = async (primeiro_nome: string, ultimo_nome: string, email: string, password: string, genero: string, telefone: string) => {
     const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primeiro_nome, ultimo_nome, email, senha: password }),
+        body: JSON.stringify({ primeiro_nome, ultimo_nome, email, senha: password, genero, telefone }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Falha no cadastro');

@@ -5,7 +5,7 @@ export const Logo: React.FC = () => {
   return (
     <Link to="/">
       <img 
-        src="project/src/assets/Logomarca-AtacadoSP.png" 
+        src="Logo" 
         alt="Logo Atacado São Paulo" 
         className="h-10"
       />

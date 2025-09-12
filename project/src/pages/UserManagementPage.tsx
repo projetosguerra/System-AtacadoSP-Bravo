@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Plus, ChevronDown } from 'lucide-react';
 import AddUserModal from '../components/AddUserModal';
 import { useAuth } from '../context/AuthContext';
 
-const UserManagementPage = () => {
+export const UserManagementPage = () => {
+  const { allUsers, fetchAllUsers } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterValue, setFilterValue] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage] = useState(1);
-  const { users, loading, error, refetchUsers } = useAuth();
+  const [isLoading, setLoading] = useState(true);
+  const [error] = useState<string | null>(null);
+  const users = allUsers || [];
 
   const filteredUsers = (users || []).filter(user => {
     const searchMatch = searchTerm === '' ||
@@ -19,11 +22,23 @@ const UserManagementPage = () => {
     return searchMatch && filterMatch;
   });
 
+  useEffect(() => {
+    const loadUsers = async () => {
+      setLoading(true);
+      await fetchAllUsers();
+      setLoading(false);
+    };
+    loadUsers();
+  }, [fetchAllUsers]);
+
   const handleUserAdded = () => {
     setIsModalOpen(false);
-    refetchUsers();
-    alert('Usuário adicionado com sucesso!');
+    fetchAllUsers(); 
   };
+
+  if (isLoading) {
+    return <div className="p-8">Carregando usuários...</div>;
+  }
 
   const getRoleName = (tipousuario: number) => {
     if (tipousuario === 1) return 'Admin';
@@ -82,16 +97,16 @@ const UserManagementPage = () => {
         {/* Tabela de Usuários */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="min-w-full overflow-x-auto">
-            {loading && (
+            {isLoading && (
               <div className="text-center p-12 text-gray-600 font-medium">Carregando usuários...</div>
             )}
-            {error && !loading && (
+            {error && !isLoading && (
               <div className="text-center p-12 text-red-600 font-medium">Erro ao carregar usuários: {error}</div>
             )}
-            {!loading && !error && filteredUsers.length === 0 && (
+            {!isLoading && !error && filteredUsers.length === 0 && (
               <div className="text-center p-12 text-gray-500">Nenhum usuário encontrado.</div>
             )}
-            {!loading && !error && filteredUsers.length > 0 && (
+            {!isLoading && !error && filteredUsers.length > 0 && (
               <table className="w-full">
                 {/* Cabeçalho da Tabela */}
                 <thead>

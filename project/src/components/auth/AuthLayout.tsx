@@ -1,5 +1,6 @@
 import React from 'react';
-import { Logo } from '../Logo.tsx';
+import Logo from '../../assets/Logomarca-AtacadoSP.png';
+import bannerImage from '../../assets/Banner 1.png';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -8,39 +9,51 @@ interface AuthLayoutProps {
     buttonText: string;
     onClick: () => void;
   };
+  onLogoClick?: () => void;
 }
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({
   children,
-  alternativeAction
+  alternativeAction,
+  onLogoClick
 }) => {
   return (
-    <div className="min-h-screen bg-white">
-      <header className="flex justify-between items-center p-6">
-        <Logo />
-        {alternativeAction && (
-          <button
-            onClick={alternativeAction.onClick}
-            className="px-6 py-2 border-2 border-green-500 text-green-600 rounded-full hover:bg-green-50 transition-colors font-medium"
+    <div className="min-h-screen bg-white flex">
+      <div className="w-full lg:w-1/2 flex flex-col">
+        <header className="flex justify-between items-center p-6">
+          <div
+            className="cursor-pointer"
+            onClick={onLogoClick}
           >
-            {alternativeAction.buttonText}
-          </button>
-        )}
-      </header>
-      <div className="flex">
-        <div className="w-full lg:w-1/2 px-6 pb-12">
-          <div className="max-w-md mx-auto lg:mx-0 lg:ml-16">
+            <img src={Logo} alt="Atacado São Paulo" className="h-16 w-auto" />
+          </div>
+
+          {alternativeAction && (
+            <button
+              onClick={alternativeAction.onClick}
+              className="px-4 py-2 border border-green-500 text-green-600 rounded-md hover:bg-green-50 transition-colors duration-200 font-medium"
+            >
+              {alternativeAction.buttonText}
+            </button>
+          )}
+        </header>
+
+        <div className="flex-1 flex justify-center px-6 pb-12">
+          <div className="w-full max-w-md">
             {children}
           </div>
         </div>
-        <div className="hidden lg:block lg:w-1/2 bg-gray-50">
-           {/* Placeholder para a imagem */}
-           <div className="flex items-center justify-center h-full">
-                <img src="../assets/Banner 1.png" alt="Placeholder" className="max-w-xs" />
-           </div>
+      </div>
+
+      <div className="hidden lg:flex lg:w-1/2 bg-gray-50 items-center justify-center max-h-screen">
+        <div className="w-full h-full flex items-center justify-center">
+          <img
+            src={bannerImage}
+            alt="Atacado São Paulo Banner"
+            className="w-full h-full object-cover"
+          />
         </div>
       </div>
     </div>
   );
 };
-
