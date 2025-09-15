@@ -1,61 +1,124 @@
-import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { PedidoPendente, HistoricalOrder } from '../types';
+import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
+import { PedidoPendente, UnitFinancials, Setor, HistoricalOrder } from '../types';
 
 interface DataContextType {
   pedidosPendentes: PedidoPendente[];
-  pedidosHistorico: HistoricalOrder[];
+  orders: HistoricalOrder[];
+  financialData: UnitFinancials | null;
+  setores: Setor[];
   isLoading: boolean;
-  refetchAllData: () => void; 
+  error: string | null;
+  refetchAllData: () => Promise<void>;
+  updateSetorLimit: (codsetor: number, newLimit: number) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-export const useData = () => {
-  const context = useContext(DataContext);
-  if (!context) throw new Error('useData deve ser usado dentro de um DataProvider');
-  return context;
-};
-
-export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoPendente[]>([]);
-  const [pedidosHistorico, setPedidosHistorico] = useState<HistoricalOrder[]>([]);
+  const [orders, setOrders] = useState<HistoricalOrder[]>([]);
+  const [financialData, setFinancialData] = useState<UnitFinancials | null>(null);
+  const [setores, setSetores] = useState<Setor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchAllData = useCallback(async () => {
+  const fetchOptions = {
+    headers: {
+      'Cache-Control': 'no-cache',
+    },
+  };
+
+  const fetchPendingOrders = async () => {
+    const response = await fetch('/api/pedidos/pendentes', fetchOptions);
+    if (!response.ok) throw new Error('Falha ao buscar pedidos pendentes');
+    const data = await response.json();
+    setPedidosPendentes(data);
+  };
+
+  const fetchOrdersHistory = async () => {
+    const response = await fetch('/api/pedidos/historico', fetchOptions);
+    if (!response.ok) throw new Error('Falha ao buscar histórico de pedidos');
+    const data = await response.json();
+    setOrders(data);
+  };
+
+  const fetchFinancialData = async () => {
+    const response = await fetch('/api/financeiro', fetchOptions);
+    if (!response.ok) throw new Error('Falha ao buscar dados financeiros');
+    const data = await response.json();
+    setFinancialData(data);
+  };
+
+  const fetchSetores = async () => {
+    const response = await fetch('/api/setores', fetchOptions);
+    if (!response.ok) throw new Error('Falha ao buscar setores');
+    const data = await response.json();
+    setSetores(data);
+  };
+  
+  const refetchAllData = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      return await Promise.all([
-        fetch('/api/pedidos/pendentes'),
-        fetch('/api/pedidos/historico')
-      ]).then(async ([pendentesRes, historicoRes]) => {
-        if (!pendentesRes.ok || !historicoRes.ok) {
-          throw new Error('Falha ao buscar dados dos pedidos.');
-        }
-        const pendentesData: PedidoPendente[] = await pendentesRes.json();
-        const historicoData: HistoricalOrder[] = await historicoRes.json();
-        setPedidosPendentes(pendentesData);
-        setPedidosHistorico(historicoData);
-      });
-    } catch (error) {
-      console.error("Erro ao buscar dados dos pedidos:", error);
-      setPedidosPendentes([]);
-      setPedidosHistorico([]);
+      await Promise.all([
+        fetchPendingOrders(),
+        fetchOrdersHistory(),
+        fetchFinancialData(),
+        fetchSetores(),
+      ]);
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchAllData(); 
-  }, [fetchAllData]);
+    refetchAllData();
+  }, [refetchAllData]);
 
-  const value = {
-    pedidosPendentes,
-    pedidosHistorico,
-    isLoading,
-    refetchAllData: fetchAllData,
+  const updateSetorLimit = async (codsetor: number, newLimit: number) => {
+    try {
+      const response = await fetch(`/api/setores/${codsetor}/limite`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saldo: newLimit }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Falha ao atualizar limite');
+      }
+      setSetores(prevSetores => 
+        prevSetores.map(s => s.codSetor === codsetor ? { ...s, saldo: newLimit } : s)
+      );
+    } catch (err: any) {
+      console.error(err);
+      throw err;
+    }
   };
 
-  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+  return (
+    <DataContext.Provider
+      value={{
+        pedidosPendentes,
+        orders,
+        financialData,
+        setores,
+        isLoading,
+        error,
+        refetchAllData,
+        updateSetorLimit,
+      }}
+    >
+      {children}
+    </DataContext.Provider>
+  );
 };
 
+export const useData = () => {
+  const context = useContext(DataContext);
+  if (context === undefined) {
+    throw new Error('useData must be used within a DataProvider');
+  }
+  return context;
+};

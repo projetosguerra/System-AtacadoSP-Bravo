@@ -108,7 +108,7 @@ app.post('/api/auth/register', async (req, res) => {
 
             await connection.execute(
                 `INSERT INTO BRAMV_USUARIOS (CODCLI, CODUSUARIO, PRIMEIRO_NOME, ULTIMO_NOME, EMAIL, SENHA, TIPOUSUARIO, GENERO, TELEFONE) 
-                 VALUES (:codcli, :codusuario, :primeiro_nome, :ultimo_nome, :email, :senha, 3, :genero, :telefone)`,
+                 VALUES (:codcli, :codusuario, :primeiro_nome, :ultimo_nome, :email, :senha, 1, :genero, :telefone)`,
                 { 
                     codcli, 
                     codusuario: nextCodUsuario,

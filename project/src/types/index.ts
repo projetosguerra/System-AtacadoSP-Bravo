@@ -12,7 +12,7 @@ export interface User {
   setor: string;
 }
 
-export interface Sector {
+export interface Setor {
   codSetor: number;
   descricao: string;
   saldo: number;
@@ -54,6 +54,7 @@ export interface CartItem extends Product {
 }
 
 export interface PedidoPendente {
+  status(status: any): unknown;
   id: number;
   data: string;
   solicitante: string;

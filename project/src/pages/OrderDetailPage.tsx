@@ -34,7 +34,6 @@ const OrderDetailPage = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // Tenta colocar o pedido em análise (status 3), mas apenas se ele estiver pendente (status 5)
         await updateStatusAPI(3, 5);
 
         const response = await fetch(`/api/pedido/${id}`);
@@ -47,7 +46,6 @@ const OrderDetailPage = () => {
       } catch (err: any) {
         if (isMounted) {
             setError(err.message);
-            // Se der erro, volta para a página anterior após um tempo
             setTimeout(() => navigate('/painel-aprovacao'), 3000);
         }
       } finally {
@@ -57,15 +55,13 @@ const OrderDetailPage = () => {
 
     fetchOrder();
 
-    // A função de limpeza agora é mais segura
     return () => {
       isMounted = false;
-      // Apenas reverte o status se o pedido ainda estiver em análise (status 3)
       if (order?.status === 3) {
         updateStatusAPI(5, 3);
       }
     };
-  }, [id, updateStatusAPI, navigate, order?.status]); // Adicione order?.status às dependências
+  }, [id, updateStatusAPI, navigate, order?.status]); 
   
   const handleDecision = async (newStatus: number, _motivo?: string) => {
     if (order) setOrder({ ...order, status: newStatus });
