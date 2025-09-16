@@ -12,15 +12,28 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
 
   const filteredPedidos = pedidos.filter(pedido =>
     Object.values(pedido).some(value =>
-      value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+      // CORREÇÃO: Usando String(value) para converter nulos de forma segura
+      String(value).toLowerCase().includes(searchTerm.toLowerCase())
     )
   );
 
   const formatCurrency = (value: number) => {
+    if (typeof value !== 'number' || isNaN(value)) {
+        return 'R$ 0,00';
+    }
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+  };
+  
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Data inválida';
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
   };
 
   return (
@@ -71,7 +84,7 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {String(index + 1).padStart(2, '0')}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{pedido.data}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(pedido.data)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{pedido.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{pedido.solicitante}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{pedido.unidadeAdmin}</td>
@@ -81,7 +94,7 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <Link
-                    to={`/analise-pedido/${pedido.id}`}
+                    to={`/pedido/${pedido.id}`}
                     className="inline-flex items-center px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors"
                   >
                     Analisar
