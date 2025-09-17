@@ -22,10 +22,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   };
 
   const subtotal = items.reduce((sum, item) => sum + (item.preco * item.quantidade), 0);
-  const shipping = 0; // Frete gratuito para B2B
+  const shipping = 0;
   const total = subtotal + shipping;
 
-  // Dados falsos para orçamento da unidade
   const unitBudget = 17250.00;
   const remainingBudget = unitBudget - total;
   const isOverBudget = remainingBudget < 0;

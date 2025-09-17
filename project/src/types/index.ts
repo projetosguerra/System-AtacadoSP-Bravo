@@ -13,9 +13,9 @@ export interface User {
 }
 
 export interface Setor {
-  codSetor: number;
-  descricao: string;
-  saldo: number;
+  CODSETOR: number;
+  DESCRICAO: string;
+  SALDO: number;
 }
 
 export interface KpiData {
@@ -26,7 +26,7 @@ export interface KpiData {
   trendValue?: string;
 }
 
-export interface UnitFinancials {
+/*export interface UnitFinancials {
   id: string;
   nome: string;
   limiteTotal: number;
@@ -37,6 +37,19 @@ export interface UnitFinancials {
     valorAnterior: number;
     novoValor: number;
     alteradoPor: string;
+  }[];
+  gastosPorSetor: {
+    CODSETOR: number;
+    DESCRICAO: string;
+    GASTO_TOTAL: number;
+  }[];
+}*/
+
+export interface FinancialData {
+  gastosPorSetor: {
+    CODSETOR: number;
+    DESCRICAO: string;
+    GASTO_TOTAL: number;
   }[];
 }
 

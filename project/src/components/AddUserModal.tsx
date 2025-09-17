@@ -11,6 +11,15 @@ interface AddUserModalProps {
   onUserAdded: () => void;
 }
 
+const formatPhoneNumber = (value: string) => {
+  if (!value) return value;
+  const phoneNumber = value.replace(/[^\d]/g, '');
+  const phoneNumberLength = phoneNumber.length;
+  if (phoneNumberLength < 3) return `(${phoneNumber}`;
+  if (phoneNumberLength < 8) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
+  return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
+};
+
 const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
   const [primeiroNome, setPrimeiroNome] = useState('');
   const [ultimoNome, setUltimoNome] = useState('');
@@ -21,7 +30,6 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
   const [senha, setSenha] = useState('');
   const [tipousuario, setTipousuario] = useState<number>(3); // 3 = Solicitante por padrão
   const [codsetor, setCodsetor] = useState<number | ''>('');
-
   const [setores, setSetores] = useState<Setor[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +40,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
       setUltimoNome('');
       setGenero('');
       setIdFuncionario('');
-      setTelefone('');
+      setTelefone(formatPhoneNumber(''));
       setEmail('');
       setSenha('');
       setTipousuario(3);
@@ -51,28 +59,40 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/usuarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          primeiroNome, ultimoNome, genero, idFuncionario, telefone,
-          email, senha, tipousuario, codsetor
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Falha ao criar usuário.');
-      onUserAdded();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  e.preventDefault(); 
+  setIsLoading(true);
+  setError(null);
 
+  try {
+    const response = await fetch('/api/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        primeiroNome,
+        ultimoNome,
+        email,
+        senha,
+        tipoUsuario: tipousuario,
+        codSetor: codsetor || null,
+        genero,
+        telefone,
+        idFuncionario
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Falha ao criar usuário');
+    }
+
+    onUserAdded(); 
+    onClose();
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
   if (!isOpen) return null;
 
   return (
@@ -183,7 +203,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                     <input
                       type="tel"
                       value={telefone}
-                      onChange={(e) => setTelefone(e.target.value)}
+                      onChange={(e) => setTelefone(formatPhoneNumber(e.target.value))}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white font-mono"
                       placeholder="(11) 99999-9999"
                     />
@@ -215,17 +235,18 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                   Acesso ao Sistema
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Senha Provisória <span className="text-red-500">*</span>
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="senha">
+                      Senha
                     </label>
                     <input
+                      id="senha"
                       type="password"
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
+                      placeholder="Crie uma senha para o novo usuário"
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white"
-                      placeholder="Digite uma senha provisória"
+                      className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   <div>

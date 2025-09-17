@@ -464,56 +464,151 @@ app.get('/api/usuarios', async (_req, res) => {
 });
 
 app.post('/api/usuarios', async (req, res) => {
-  const {
-    email, senha, tipousuario, codsetor,
-    primeiroNome, ultimoNome, genero, idFuncionario, telefone
-  } = req.body;
+    // Agora esperamos todos os dados, incluindo a senha e o tipo de usuário
+    const { primeiroNome, ultimoNome, email, senha, tipoUsuario, codSetor, genero, telefone, idFuncionario } = req.body;
+    const codcli = 27995;
 
-  if (tipousuario === 3 && !codsetor) {
-    return res.status(400).json({ error: 'O campo Setor é obrigatório para Solicitantes.' });
-  }
+    if (!primeiroNome || !email || !senha || !tipoUsuario) {
+        return res.status(400).json({ error: 'Nome, e-mail, senha e perfil são obrigatórios.' });
+    }
 
-  try {
-    const result = await withDatabase(async (connection) => {
-      const maxUserResult = await connection.execute<{ NEXT_ID: number }>(
-        `SELECT NVL(MAX(CODUSUARIO), 0) + 1 AS NEXT_ID FROM BRAMV_USUARIOS`, [], { outFormat: oracledb.OUT_FORMAT_OBJECT }
-      );
-      if (!maxUserResult.rows || maxUserResult.rows.length === 0 || maxUserResult.rows[0] === undefined) {
-        throw new Error('Não foi possível obter o próximo ID de usuário.');
-      }
-      const nextUserId = (maxUserResult.rows[0] as { NEXT_ID: number }).NEXT_ID;
+    try {
+        const hashedPassword = await bcrypt.hash(senha, 10);
 
-      await connection.execute(
-        `INSERT INTO BRAMV_USUARIOS (
-                    CODCLI, CODUSUARIO, EMAIL, SENHA, TIPOUSUARIO, CODSETOR, 
-                    PRIMEIRO_NOME, ULTIMO_NOME, GENERO, ID_FUNCIONARIO, TELEFONE
-                 ) VALUES (
-                    :codcli, :codusuario, :email, :senha, :tipousuario, :codsetor, 
-                    :primeiroNome, :ultimoNome, :genero, :idFuncionario, :telefone
-                 )`,
-        {
-          codcli: 27995,
-          codusuario: nextUserId,
-          email, senha, tipousuario,
-          codsetor: tipousuario === 3 ? codsetor : null,
-          primeiroNome, ultimoNome, genero, idFuncionario, telefone
-        },
-        { autoCommit: true }
-      );
-      return { codusuario: nextUserId, email };
-    });
-    res.status(201).json({ success: true, message: 'Usuário criado com sucesso!', user: result });
-  } catch (err) {
-    console.error('ERRO AO CRIAR USUÁRIO:', err);
-    res.status(500).json({ error: 'Erro ao criar usuário.' });
-  }
+        await withDatabase(async (connection) => {
+            const userExists = await connection.execute(
+                `SELECT CODUSUARIO FROM BRAMV_USUARIOS WHERE EMAIL = :email AND CODCLI = :codcli`,
+                { email, codcli }
+            );
+
+            if (userExists.rows && userExists.rows.length > 0) {
+                throw new Error('Este e-mail já está em uso.');
+            }
+
+            const maxCodResult = await connection.execute(
+                `SELECT NVL(MAX(CODUSUARIO), 0) + 1 AS NEXT_CODUSUARIO FROM BRAMV_USUARIOS`
+            );
+            if (!maxCodResult.rows || maxCodResult.rows.length === 0) {
+                throw new Error('Não foi possível gerar um novo número de usuário.');
+            }
+            const nextCodUsuario = (maxCodResult.rows as any[])[0][0];
+
+            await connection.execute(
+                `INSERT INTO BRAMV_USUARIOS (
+                    CODCLI, CODUSUARIO, PRIMEIRO_NOME, ULTIMO_NOME, EMAIL, SENHA, 
+                    TIPOUSUARIO, CODSETOR, GENERO, TELEFONE, ID_FUNCIONARIO
+                ) VALUES (
+                    :codcli, :codusuario, :primeiro_nome, :ultimo_nome, :email, :senha, 
+                    :tipoUsuario, :codSetor, :genero, :telefone, :idFuncionario
+                )`,
+                { 
+                    codcli, 
+                    codusuario: nextCodUsuario,
+                    primeiro_nome: primeiroNome, 
+                    ultimo_nome: ultimoNome || '',
+                    email, 
+                    senha: hashedPassword,
+                    tipoUsuario,
+                    codSetor: codSetor || null,
+                    genero: genero || null,
+                    telefone: telefone || null,
+                    idFuncionario: idFuncionario || null
+                },
+                { autoCommit: true }
+            );
+
+            res.status(201).json({ success: true, message: 'Usuário criado com sucesso!' });
+        });
+    } catch (err: any) {
+        if (err.message.includes('já está em uso')) {
+            return res.status(409).json({ error: err.message });
+        }
+        console.error('ERRO AO CRIAR USUÁRIO:', err);
+        res.status(500).json({ error: 'Erro interno ao criar o usuário.' });
+    }
+});
+
+app.put('/api/usuarios/:codUsuario', async (req, res) => {
+    const { codUsuario } = req.params;
+    const { primeiroNome, ultimoNome, email, tipoUsuario, codSetor, genero, telefone, idFuncionario } = req.body;
+    const codcli = 27995;
+
+    if (!primeiroNome || !email || !tipoUsuario) {
+        return res.status(400).json({ error: 'Nome, e-mail e perfil são obrigatórios.' });
+    }
+
+    try {
+        await withDatabase(async (connection) => {
+            const result = await connection.execute(
+                `UPDATE BRAMV_USUARIOS SET
+                    PRIMEIRO_NOME = :primeiroNome,
+                    ULTIMO_NOME = :ultimoNome,
+                    EMAIL = :email,
+                    TIPOUSUARIO = :tipoUsuario,
+                    CODSETOR = :codSetor,
+                    GENERO = :genero,
+                    TELEFONE = :telefone,
+                    ID_FUNCIONARIO = :idFuncionario
+                 WHERE CODUSUARIO = :codUsuario AND CODCLI = :codcli`,
+                {
+                    primeiroNome,
+                    ultimoNome: ultimoNome || '',
+                    email,
+                    tipoUsuario,
+                    codSetor: codSetor || null,
+                    genero: genero || null,
+                    telefone: telefone || null,
+                    idFuncionario: idFuncionario || null,
+                    codUsuario: Number(codUsuario),
+                    codcli
+                },
+                { autoCommit: true }
+            );
+
+            if (result.rowsAffected === 0) {
+                return res.status(404).json({ error: 'Usuário não encontrado.' });
+            }
+
+            res.status(200).json({ success: true, message: 'Usuário atualizado com sucesso.' });
+        });
+    } catch (err: any) {
+        console.error(`ERRO AO ATUALIZAR USUÁRIO ${codUsuario}:`, err);
+        if (err.errorNum === 1) {
+             return res.status(409).json({ error: 'O e-mail fornecido já está em uso por outro usuário.' });
+        }
+        res.status(500).json({ error: 'Erro interno ao atualizar o usuário.' });
+    }
+});
+
+app.delete('/api/usuarios/:codUsuario', async (req, res) => {
+    const { codUsuario } = req.params;
+    const codcli = 27995;
+
+    try {
+        await withDatabase(async (connection) => {
+            const result = await connection.execute(
+                `DELETE FROM BRAMV_USUARIOS WHERE CODUSUARIO = :codUsuario AND CODCLI = :codcli`,
+                { codUsuario: Number(codUsuario), codcli },
+                { autoCommit: true }
+            );
+
+            if (result.rowsAffected === 0) {
+                return res.status(404).json({ error: 'Usuário não encontrado ou já foi excluído.' });
+            }
+
+            res.status(200).json({ success: true, message: 'Usuário excluído com sucesso.' });
+        });
+    } catch (err: any) {
+        console.error(`ERRO AO EXCLUIR USUÁRIO ${codUsuario}:`, err);
+        res.status(500).json({ error: 'Erro interno ao excluir o usuário.' });
+    }
 });
 
 app.get('/api/setores', async (_req, res) => {
   try {
     const setores = await withDatabase(async (connection) => {
       const result = await connection.execute(
-        `SELECT CODSETOR, DESCRICAO FROM BRAMV_SETOR WHERE CODCLI = 27995 ORDER BY DESCRICAO`,
+        `SELECT CODSETOR, DESCRICAO, SALDO FROM BRAMV_SETOR WHERE CODCLI = 27995 ORDER BY DESCRICAO`,
         [],
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
@@ -524,6 +619,34 @@ app.get('/api/setores', async (_req, res) => {
     console.error('ERRO AO BUSCAR SETORES:', err);
     res.status(500).json({ error: 'Erro ao buscar setores.' });
   }
+});
+
+app.put('/api/setores/:codsetor/limite', async (req, res) => {
+    const { codsetor } = req.params;
+    const { saldo } = req.body;
+
+    if (saldo === undefined || saldo === null || isNaN(Number(saldo))) {
+        return res.status(400).json({ error: 'O novo limite (saldo) é obrigatório e deve ser um número.' });
+    }
+
+    try {
+        await withDatabase(async (connection) => {
+            const result = await connection.execute(
+                `UPDATE BRAMV_SETOR SET SALDO = :saldo WHERE CODSETOR = :codsetor`,
+                { saldo: Number(saldo), codsetor: Number(codsetor) },
+                { autoCommit: true }
+            );
+
+            if (result.rowsAffected === 0) {
+                return res.status(404).json({ error: 'Setor não encontrado.' });
+            }
+
+            res.status(200).json({ success: true, message: 'Limite do setor atualizado com sucesso.' });
+        });
+    } catch (err: any) {
+        console.error(`ERRO AO ATUALIZAR LIMITE DO SETOR ${codsetor}:`, err);
+        res.status(500).json({ error: 'Erro interno ao atualizar o limite do setor.' });
+    }
 });
 
 app.get('/api/pedidos/pendentes', async (_req, res) => {
@@ -569,6 +692,35 @@ app.get('/api/pedidos/pendentes', async (_req, res) => {
     console.error('ERRO AO BUSCAR PEDIDOS PENDENTES:', err);
     res.status(500).json({ error: 'Erro ao buscar pedidos pendentes.' });
   }
+});
+
+app.get('/api/financeiro', async (_req, res) => {
+    const codcli = 27995;
+    try {
+        await withDatabase(async (connection) => {
+            const gastosPorSetorResult = await connection.execute(
+                `SELECT 
+                    s.CODSETOR, 
+                    s.DESCRICAO, 
+                    NVL(SUM(pi.QT * pi.PVENDA), 0) AS GASTO_TOTAL
+                 FROM BRAMV_SETOR s
+                 LEFT JOIN BRAMV_USUARIOS u ON s.CODSETOR = u.CODSETOR AND s.CODCLI = u.CODCLI
+                 LEFT JOIN BRAMV_PEDIDOC pc ON u.CODUSUARIO = pc.CODUSUARIO AND pc.STATUS = 1 -- Apenas pedidos aprovados
+                 LEFT JOIN BRAMV_PEDIDOI pi ON pc.NUMPEDRCA = pi.NUMPEDRCA
+                 WHERE s.CODCLI = :codcli
+                 GROUP BY s.CODSETOR, s.DESCRICAO
+                 ORDER BY s.DESCRICAO`,
+                { codcli },
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            );
+
+            const gastosPorSetor = gastosPorSetorResult.rows || [];
+            res.status(200).json({ gastosPorSetor });
+        });
+    } catch (err: any) {
+        console.error('ERRO AO BUSCAR DADOS FINANCEIROS:', err);
+        res.status(500).json({ error: 'Erro ao buscar dados financeiros.' });
+    }
 });
 
 console.log('--- [FASE 3 de 4] Todas as rotas registradas. Iniciando o servidor... ---');

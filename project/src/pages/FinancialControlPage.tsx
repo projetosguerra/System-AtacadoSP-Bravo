@@ -1,213 +1,125 @@
-import React, { useState } from 'react';
-import { ChevronDown, FileText, TrendingDown, DollarSign, Edit } from 'lucide-react';
-import { UnitFinancials } from '../types';
-import { mockFinancialData } from '../data/mockFinancials';
-import EditLimitModal from '../components/EditLimitModal.tsx';
+import React, { useState, useMemo } from 'react';
+import { ChevronDown, DollarSign, Edit } from 'lucide-react';
+import { useData } from '../context/DataContext';
+import EditLimitModal from '../components/EditLimitModal';
+import { Setor } from '../types';
+import { KpiData } from '../types';
+import KpiCard from '../components/KpiCard';
 
 const FinancialControlPage: React.FC = () => {
-    const [selectedUnit, setSelectedUnit] = useState<UnitFinancials | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-    const [financialData, setFinancialData] = useState<UnitFinancials[]>(mockFinancialData);
+    const { setores, financialData, isLoading, updateSetorLimit } = useData();
 
-    const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const unitId = e.target.value;
-        if (unitId === '') {
-            setSelectedUnit(null);
-        } else {
-            const unit = financialData.find(u => u.id === unitId);
-            setSelectedUnit(unit || null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const [selectedSetor, setSelectedSetor] = useState<Setor | null>(null);
+
+    const selectedData = useMemo(() => {
+        if (!selectedSetor) return null;
+
+        // 1. CORREÇÃO: Usar 'CODSETOR' (maiúsculo) para a comparação
+        const setor = setores.find(s => String(s.CODSETOR) === String(selectedSetor.CODSETOR));
+        if (!setor) return null;
+
+        const gasto = financialData?.gastosPorSetor.find(g => g.CODSETOR === setor.CODSETOR)?.GASTO_TOTAL || 0;
+        // 2. CORREÇÃO: Usar 'SALDO' (maiúsculo) para o limite
+        const limite = setor.SALDO || 0;
+        const disponivel = limite - gasto;
+
+        return { setor, gasto, limite, disponivel };
+    }, [selectedSetor, setores, financialData]);
+
+    const handleSetorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selected = setores.find(s => String(s.CODSETOR) === e.target.value) || null;
+        setSelectedSetor(selected);
+    };
+
+    const handleEditLimit = (setor: Setor) => {
+        setSelectedSetor(setor);
+        setIsModalOpen(true);
+    };
+
+    const handleSaveLimit = async (newLimit: number) => {
+        if (selectedSetor) {
+            try {
+                await updateSetorLimit(selectedSetor.CODSETOR, newLimit);
+                setIsModalOpen(false);
+            } catch (error) {
+                console.error("Erro ao salvar o limite:", error);
+            }
         }
     };
 
-    const handleSaveLimit = (newLimit: number) => {
-        if (!selectedUnit) return;
+    if (isLoading) {
+        return <div className="p-8 text-center text-gray-500">A carregar dados financeiros...</div>;
+    }
 
-        const updatedData = financialData.map(unit => {
-            if (unit.id === selectedUnit.id) {
-                const newHistoryEntry = {
-                    data: new Date().toLocaleDateString('pt-BR'),
-                    valorAnterior: unit.limiteTotal,
-                    novoValor: newLimit,
-                    alteradoPor: 'Pietro Guerra'
-                };
-
-                const updatedUnit = {
-                    ...unit,
-                    limiteTotal: newLimit,
-                    saldoDisponivel: newLimit - unit.valorGasto,
-                    historico: [newHistoryEntry, ...unit.historico]
-                };
-
-                setSelectedUnit(updatedUnit);
-                return updatedUnit;
-            }
-            return unit;
-        });
-
-        setFinancialData(updatedData);
-    };
-
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(value);
-    };
+    const kpiCards: KpiData[] = selectedData ? [
+        { title: 'Limite Total', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedData.limite) },
+        { title: 'Valor Gasto', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedData.gasto) },
+        { title: 'Saldo Disponível', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedData.disponivel) }
+    ] : [];
 
     return (
-        <div className="space-y-6">
-            <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
-                {/* Unit Selection */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                        Selecione uma Unidade Administrativa para começar
-                    </h2>
+        <div className="p-8 bg-gray-50 min-h-screen">
+            <h1 className="text-3xl font-bold text-gray-800 mb-6">Controle Financeiro por Secretaria</h1>
+            <div className="relative mt-4 md:mt-0 w-full md:w-72">
+                <select
+                    value={selectedSetor ? String(selectedSetor.CODSETOR) : ""}
+                    onChange={handleSetorChange}
+                    className="w-full pl-4 pr-10 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                >
+                    <option value="">Selecione uma Secretaria...</option>
+                    {setores.map((setor) => (
+                        <option key={setor.CODSETOR} value={setor.CODSETOR}>
+                            {setor.DESCRICAO}
+                        </option>
+                    ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            </div>
+            <main>
+                {selectedData ? (
+                    <div className="space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                            {kpiCards.map((kpi, index) => <KpiCard key={index} data={kpi} />)}
+                        </div>
 
-                    <div className="relative max-w-md">
-                        <select
-                            value={selectedUnit?.id || ''}
-                            onChange={handleUnitChange}
-                            className="w-full appearance-none bg-white border border-gray-300 rounded-lg px-4 py-3 pr-10 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                            <option value="">Unidade Administrativa</option>
-                            {financialData.map(unit => (
-                                <option key={unit.id} value={unit.id}>
-                                    {unit.nome}
-                                </option>
-                            ))}
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-medium text-gray-900">
+                                    Histórico de Alterações de Limite
+                                </h3>
+                                <button
+                                    onClick={() => { setIsModalOpen(true); handleEditLimit(selectedData.setor); }}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-100 rounded-lg hover:bg-blue-200"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                    Editar Limite
+                                </button>
+                            </div>
+                            {/* Aqui pode ser implementada a tabela de histórico no futuro */}
+                            <div className="mt-4 text-center text-gray-500">
+                                (A tabela com o histórico de alterações será implementada aqui)
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                {/* Financial Summary Cards */}
-                {selectedUnit && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Limite Total Card */}
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 relative">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                                    <FileText className="w-6 h-6 text-green-600" />
-                                </div>
-                            </div>
-                            <div className="text-3xl font-bold text-gray-900 mb-2">
-                                {formatCurrency(selectedUnit.limiteTotal)}
-                            </div>
-                            <div className="text-sm text-gray-600 mb-4">Limite Total</div>
-                            <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
-                            >
-                                <Edit className="w-4 h-4" />
-                                Editar Limite
-                            </button>
-                        </div>
-
-                        {/* Valor Gasto Card */}
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                                    <TrendingDown className="w-6 h-6 text-red-600" />
-                                </div>
-                            </div>
-                            <div className="text-3xl font-bold text-gray-900 mb-2">
-                                {formatCurrency(selectedUnit.valorGasto)}
-                            </div>
-                            <div className="text-sm text-gray-600">Valor Gasto</div>
-                        </div>
-
-                        {/* Saldo Disponível Card */}
-                        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                    <DollarSign className="w-6 h-6 text-blue-600" />
-                                </div>
-                            </div>
-                            <div className="text-3xl font-bold text-gray-900 mb-2">
-                                {formatCurrency(selectedUnit.saldoDisponivel)}
-                            </div>
-                            <div className="text-sm text-gray-600">Saldo Disponível</div>
-                        </div>
+                ) : (
+                    <div className="text-center text-gray-500 py-20">
+                        <DollarSign className="mx-auto w-12 h-12 text-gray-400 mb-4" />
+                        <h3 className="text-lg font-medium">Selecione uma Unidade Administrativa</h3>
+                        <p>Escolha uma unidade no seletor acima para visualizar as suas informações financeiras.</p>
                     </div>
                 )}
+            </main>
 
-                {/* History Table */}
-                {selectedUnit && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h2 className="text-lg font-semibold text-gray-900">Tabela de Histórico</h2>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Data da alteração
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Valor Anterior
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Novo valor do limite
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Alterado por
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {selectedUnit.historico.map((entry, index) => (
-                                        <tr key={index} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {entry.data}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                                {formatCurrency(entry.valorAnterior)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                                                {formatCurrency(entry.novoValor)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
-                                                {entry.alteradoPor}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {selectedUnit.historico.length === 0 && (
-                            <div className="px-6 py-8 text-center text-gray-500">
-                                Nenhum histórico de alterações encontrado para esta unidade.
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Empty State */}
-                {!selectedUnit && (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <DollarSign className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                            Selecione uma Unidade Administrativa
-                        </h3>
-                        <p className="text-gray-500">
-                            Escolha uma unidade no seletor acima para visualizar suas informações financeiras e histórico de alterações.
-                        </p>
-                    </div>
-                )}
-
-                {/* Edit Limit Modal */}
+            {isModalOpen && (
                 <EditLimitModal
                     isOpen={isModalOpen}
+                    setor={selectedSetor}
                     onClose={() => setIsModalOpen(false)}
-                    unit={selectedUnit}
                     onSave={handleSaveLimit}
                 />
-            </main>
+            )}
         </div>
     );
 };

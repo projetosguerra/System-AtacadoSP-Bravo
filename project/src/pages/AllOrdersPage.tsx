@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import KpiCard from '../components/KpiCard';
 import OrdersHistoryTable from '../components/OrdersHistoryTable';
-import { HistoricalOrder, KpiData } from '../types';
+import { KpiData } from '../types';
 import { useData } from '../context/DataContext';
 
 const AllOrdersPage: React.FC = () => {

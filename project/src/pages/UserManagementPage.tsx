@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, ChevronDown } from 'lucide-react';
 import AddUserModal from '../components/AddUserModal';
+import UserDetailsModal from '../components/UserDetailsModal';
 import { useAuth } from '../context/AuthContext';
+import { User } from '../types';
 
 export const UserManagementPage = () => {
   const { allUsers, fetchAllUsers } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterValue, setFilterValue] = useState('Todos');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddModalOpen, setAddModalOpen] = useState(false);
+  const [isDetailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentPage] = useState(1);
   const [isLoading, setLoading] = useState(true);
   const [error] = useState<string | null>(null);
@@ -32,8 +36,18 @@ export const UserManagementPage = () => {
   }, [fetchAllUsers]);
 
   const handleUserAdded = () => {
-    setIsModalOpen(false);
-    fetchAllUsers(); 
+    setAddModalOpen(false);
+    fetchAllUsers();
+  };
+
+  const handleUserDeleted = () => {
+    setDetailsModalOpen(false);
+    fetchAllUsers();
+  };
+
+  const handleViewDetails = (user: User) => {
+    setSelectedUser(user);
+    setDetailsModalOpen(true);
   };
 
   if (isLoading) {
@@ -50,8 +64,8 @@ export const UserManagementPage = () => {
   return (
     <div className="flex flex-col h-full bg-gray-50">
       <AddUserModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isAddModalOpen}
+        onClose={() => setAddModalOpen(false)}
         onUserAdded={handleUserAdded}
       />
       <main className="flex-1 p-8 space-y-6">
@@ -59,7 +73,7 @@ export const UserManagementPage = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Gerenciamento de Usuários</h1>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => setAddModalOpen(true)}
             className="flex items-center gap-2 px-5 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition-all duration-200"
           >
             <Plus className="w-5 h-5" />
@@ -149,8 +163,8 @@ export const UserManagementPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${user.tipoUsuario === 1 ? 'bg-purple-100 text-purple-800' :
-                            user.tipoUsuario === 2 ? 'bg-orange-100 text-orange-800' :
-                              'bg-green-100 text-green-800'
+                          user.tipoUsuario === 2 ? 'bg-orange-100 text-orange-800' :
+                            'bg-green-100 text-green-800'
                           }`}>
                           {getRoleName(user.tipoUsuario)}
                         </span>
@@ -158,8 +172,11 @@ export const UserManagementPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {user.codSetor || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button className="text-blue-600 hover:text-blue-800 font-medium transition-colors duration-150 hover:underline">
+                      <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm text-right">
+                        <button
+                          onClick={() => handleViewDetails(user)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
                           Ver mais
                         </button>
                       </td>
@@ -189,6 +206,22 @@ export const UserManagementPage = () => {
               Mostrando {filteredUsers.length} de {users.length} usuários
             </div>
           </div>
+          {isAddModalOpen && (
+            <AddUserModal
+              isOpen={isAddModalOpen}
+              onClose={() => setAddModalOpen(false)}
+              onUserAdded={handleUserAdded}
+            />
+          )}
+
+          <UserDetailsModal
+            user={selectedUser}
+            onClose={() => {
+              console.log("Função 'onClose' foi chamada na página principal (UserManagementPage).");
+              setDetailsModalOpen(false);
+            }}
+            onUserDeleted={handleUserDeleted}
+          />
         </div>
       </main>
     </div>

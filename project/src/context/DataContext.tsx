@@ -1,10 +1,10 @@
 import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
-import { PedidoPendente, UnitFinancials, Setor, HistoricalOrder } from '../types';
+import { PedidoPendente, FinancialData, Setor, HistoricalOrder } from '../types';
 
 interface DataContextType {
   pedidosPendentes: PedidoPendente[];
   orders: HistoricalOrder[];
-  financialData: UnitFinancials | null;
+  financialData: FinancialData | null;
   setores: Setor[];
   isLoading: boolean;
   error: string | null;
@@ -17,7 +17,7 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoPendente[]>([]);
   const [orders, setOrders] = useState<HistoricalOrder[]>([]);
-  const [financialData, setFinancialData] = useState<UnitFinancials | null>(null);
+  const [financialData, setFinancialData] = useState<FinancialData | null>(null);
   const [setores, setSetores] = useState<Setor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +89,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(err.error || 'Falha ao atualizar limite');
       }
       setSetores(prevSetores => 
-        prevSetores.map(s => s.codSetor === codsetor ? { ...s, saldo: newLimit } : s)
+        prevSetores.map(s => s.CODSETOR === codsetor ? { ...s, SALDO: newLimit } : s)
       );
     } catch (err: any) {
       console.error(err);
