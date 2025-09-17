@@ -1,16 +1,18 @@
 import React from 'react';
 import { ShoppingCart, AlertCircle } from 'lucide-react';
-import { CartItem } from '../types';
 
 export interface OrderSummaryProps {
-  items: CartItem[];
   total: number;
+  availableBalance: number;
+  willExceedLimit: boolean; 
   onSubmitOrder: () => Promise<void>;
   onClearCart: () => void;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({ 
-  items, 
+  total,
+  availableBalance,
+  willExceedLimit,
   onSubmitOrder, 
   onClearCart 
 }) => {
@@ -21,13 +23,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     }).format(value);
   };
 
-  const subtotal = items.reduce((sum, item) => sum + (item.preco * item.quantidade), 0);
-  const shipping = 0;
-  const total = subtotal + shipping;
-
-  const unitBudget = 17250.00;
-  const remainingBudget = unitBudget - total;
-  const isOverBudget = remainingBudget < 0;
+  const remainingBudget = availableBalance - total;
+  const isOverBudget = willExceedLimit;
 
   return (
     <div className="space-y-6">
@@ -35,49 +32,39 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center gap-2 mb-4">
           <ShoppingCart className="w-5 h-5 text-gray-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Resumo do Pedido</h2>
+          <h2 className="text-lg font-semibold text-gray-800">Resumo do Pedido</h2>
         </div>
-
-        <div className="space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Subtotal ({items.length} {items.length === 1 ? 'item' : 'itens'})</span>
-            <span className="text-gray-900">{formatCurrency(subtotal)}</span>
+        
+        <div className="space-y-3 text-sm">
+          {/* Subtotal e Frete */}
+          <div className="flex justify-between">
+            <span className="text-gray-600">Subtotal</span>
+            <span className="text-gray-900">{formatCurrency(total)}</span>
           </div>
-          
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between">
             <span className="text-gray-600">Frete</span>
-            <span className="text-green-600 font-medium">Grátis</span>
+            <span className="text-gray-900">Grátis</span>
           </div>
-          
-          <div className="border-t border-gray-200 pt-3">
-            <div className="flex justify-between text-lg font-semibold">
-              <span className="text-gray-900">Total</span>
-              <span className="text-gray-900">{formatCurrency(total)}</span>
-            </div>
+          <hr />
+          {/* Total */}
+          <div className="flex justify-between font-bold text-base">
+            <span className="text-gray-800">Total do Pedido</span>
+            <span className="text-gray-900">{formatCurrency(total)}</span>
           </div>
         </div>
       </div>
 
-      {/* Controle de Orçamento */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <AlertCircle className={`w-5 h-5 ${isOverBudget ? 'text-red-500' : 'text-blue-500'}`} />
-          <h3 className="text-lg font-semibold text-gray-900">Controle de Orçamento</h3>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Saldo Atual da Unidade</span>
-            <span className="text-gray-900 font-medium">{formatCurrency(unitBudget)}</span>
-          </div>
-          
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Valor do Pedido</span>
-            <span className="text-gray-900">{formatCurrency(total)}</span>
-          </div>
-          
-          <div className="border-t border-gray-200 pt-3">
-            <div className="flex justify-between text-sm">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">
+          Controle de Orçamento
+        </h2>
+        <div>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Saldo Disponível do Setor</span>
+              <span className="font-medium text-green-600">{formatCurrency(availableBalance)}</span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-gray-600">Saldo Restante Após Pedido</span>
               <span className={`font-medium ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
                 {formatCurrency(remainingBudget)}
@@ -90,7 +77,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <p className="text-sm text-red-700">
-                  Este pedido excede o orçamento disponível da unidade. Será necessária aprovação especial.
+                  Este pedido excede o orçamento disponível da unidade.
                 </p>
               </div>
             </div>
@@ -102,7 +89,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       <div className="space-y-3">
         <button
           onClick={onSubmitOrder}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+          disabled={isOverBudget}
+          className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           <ShoppingCart className="w-5 h-5" />
           Enviar para Aprovação
@@ -110,9 +98,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         
         <button
           onClick={onClearCart}
-          className="w-full text-gray-600 hover:text-gray-800 font-medium py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          className="w-full text-gray-600 hover:text-gray-800 hover:bg-gray-100 font-medium py-3 px-4 rounded-lg transition-colors"
         >
-          Esvaziar Carrinho
+          Limpar Carrinho
         </button>
       </div>
     </div>
