@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { PedidoPendente, FinancialData, Setor, HistoricalOrder } from '../types';
+import { useAuth } from './AuthContext';
 
 interface DataContextType {
   pedidosPendentes: PedidoPendente[];
@@ -15,6 +16,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoPendente[]>([]);
   const [orders, setOrders] = useState<HistoricalOrder[]>([]);
   const [financialData, setFinancialData] = useState<FinancialData | null>(null);
@@ -77,25 +79,31 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     refetchAllData();
   }, [refetchAllData]);
 
-  const updateSetorLimit = async (codsetor: number, newLimit: number) => {
-    try {
-      const response = await fetch(`/api/setores/${codsetor}/limite`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saldo: newLimit }),
-      });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Falha ao atualizar limite');
-      }
-      setSetores(prevSetores => 
-        prevSetores.map(s => s.CODSETOR === codsetor ? { ...s, SALDO: newLimit } : s)
-      );
-    } catch (err: any) {
-      console.error(err);
-      throw err;
+  const updateSetorLimit = useCallback(async (codsetor: number, saldo: number) => {
+    if (!user?.codUsuario) {
+      throw new Error('Usuário não autenticado para alterar limite.');
     }
-  };
+
+    const res = await fetch(`/api/setores/${codsetor}/limite`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        saldo,
+        alteradoPorCodUsuario: user.codUsuario,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error || 'Falha ao atualizar limite do setor.');
+    }
+
+    setSetores(prev =>
+      prev.map(s => (Number(s.CODSETOR) === Number(codsetor) ? { ...s, SALDO: saldo } as Setor : s))
+    );
+
+    await fetchFinancialData?.();
+  }, [user]);
 
   return (
     <DataContext.Provider

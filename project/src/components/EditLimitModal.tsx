@@ -6,14 +6,16 @@ interface EditLimitModalProps {
   isOpen: boolean;
   onClose: () => void;
   setor: Setor | null;
-  onSave: (newLimit: number) => void;
+  onSave: (newLimit: number) => Promise<void> | void;
 }
 
 const EditLimitModal: React.FC<EditLimitModalProps> = ({ isOpen, onClose, setor, onSave }) => {
   const [newLimit, setNewLimit] = useState<string>('');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   useEffect(() => {
     if (setor) {
+      // Armazena como "centavos" para manter a máscara consistente
       setNewLimit((setor.SALDO || 0).toFixed(2).replace('.', ''));
     }
   }, [setor]);
@@ -22,16 +24,23 @@ const EditLimitModal: React.FC<EditLimitModalProps> = ({ isOpen, onClose, setor,
     return null;
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!setor) return;
 
     const limitInCents = parseFloat(newLimit);
-
     if (!isNaN(limitInCents) && limitInCents >= 0) {
-      const correctLimitValue = limitInCents / 100; 
-
-      onSave(correctLimitValue);
-      onClose();
+      const correctLimitValue = limitInCents / 100;
+      try {
+        setIsSaving(true);
+        await Promise.resolve(onSave(correctLimitValue));
+        // Fecha o modal somente após sucesso
+        onClose();
+      } catch (err) {
+        // Mantém o modal aberto em caso de erro para o usuário tentar novamente
+        console.error('Erro ao salvar novo limite:', err);
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -73,16 +82,25 @@ const EditLimitModal: React.FC<EditLimitModalProps> = ({ isOpen, onClose, setor,
               onChange={handleInputChange}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
               placeholder="R$ 0,00"
+              disabled={isSaving}
             />
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            disabled={isSaving}
+          >
             Cancelar
           </button>
-          <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-            Salvar Alterações
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-60"
+            disabled={isSaving}
+          >
+            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
           </button>
         </div>
       </div>
