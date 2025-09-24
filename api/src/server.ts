@@ -6,6 +6,8 @@ import cors from 'cors';
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { loggingMiddleware } from './middleware/loggingMiddleware.js';
+import { cacheControlMiddleware } from './middleware/cacheControlMiddleware.js';
 
 console.log('--- [FASE 1 de 4] Início do arquivo server.ts ---');
 
@@ -24,6 +26,8 @@ app.options('*', cors());
 
 app.use(cors());
 app.use(express.json());
+app.use(loggingMiddleware);
+app.use('/api', cacheControlMiddleware);
 
 const dbConfig = {
     user: process.env.DB_USER,
@@ -289,7 +293,22 @@ app.put('/api/pedido/:id/status', async (req, res) => {
 
         res.status(200).json({ success: true, message: `Status do Pedido #${id} atualizado.` });
     } catch (err: any) {
-        console.error(`ERRO AO ATUALIZAR STATUS DO PEDIDO ${id}:`, err);
+        if (
+            err.message === 'O status do pedido foi alterado por outro usuário. A página será atualizada.'
+        ) {
+            const atual = await withDatabase(async (connection) => {
+                const res = await connection.execute<{ STATUS: number }>(
+                    `SELECT STATUS FROM BRAMV_PEDIDOC WHERE NUMPEDRCA = :id`,
+                    { id: Number(id) },
+                    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+                );
+                return (res.rows && res.rows[0] && typeof res.rows[0].STATUS !== 'undefined') ? res.rows[0].STATUS : null;
+            });
+            return res.status(409).json({
+                error: err.message,
+                statusAtual: atual,
+            });
+        }
         res.status(500).json({ error: err.message || 'Erro ao atualizar o status do pedido.' });
     }
 });
@@ -637,7 +656,7 @@ app.get('/api/setores/:codsetor/pedidos', async (req, res) => {
                 WHERE u.CODSETOR = :codsetor AND pc.STATUS = 1 -- Apenas pedidos com Status 1 (Aprovado)
                 ORDER BY pc.DATA DESC
             `;
-            
+
             const result = await connection.execute(query, { codsetor: Number(codsetor) }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
             res.status(200).json(result.rows || []);
         });
