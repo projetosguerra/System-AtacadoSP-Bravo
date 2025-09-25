@@ -447,7 +447,7 @@ app.post('/api/carrinho/:codusuario/submit', async (req, res) => {
 });
 
 app.get('/api/usuarios', async (_req, res) => {
-    const codcli = 27995; // Código do cliente fixo
+    const codcli = 27995; 
     try {
         const users = await withDatabase(async (connection) => {
             const result = await connection.execute<{ [key: string]: any }>(
@@ -483,7 +483,6 @@ app.get('/api/usuarios', async (_req, res) => {
 });
 
 app.post('/api/usuarios', async (req, res) => {
-    // Agora esperamos todos os dados, incluindo a senha e o tipo de usuário
     const { primeiroNome, ultimoNome, email, senha, tipoUsuario, codSetor, genero, telefone, idFuncionario } = req.body;
     const codcli = 27995;
 

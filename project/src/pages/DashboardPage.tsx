@@ -1,13 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import StatsCard from '../components/StatsCard';
 import VolumeChart from '../components/LineChart';
 import StatusChart from '../components/DonutChart';
 import ApprovalTable from '../components/QuickApprovalTable';
 import RecentActivities from '../components/RecentActivities';
 import { DollarSign, Package, AlertTriangle, Clock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const DashboardPage = () => {
+  const { user } = useAuth();
   const [novosPedidos, setNovosPedidos] = useState<number | string>('...');
+
+  console.log('USER PERFIL =>', user?.perfil, typeof user?.perfil);
+
+  const canSeeApprovalTable = useMemo(() => {
+    if (!user) return false;
+    const perfilNum = Number(user.perfil);
+    return perfilNum === 1 || perfilNum === 2;
+  }, [user]);
 
   useEffect(() => {
     fetch('https://jsonplaceholder.typicode.com/todos')
@@ -66,7 +76,9 @@ const DashboardPage = () => {
       {/* Table and Activities */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <ApprovalTable />
+          {canSeeApprovalTable && (
+            <ApprovalTable />
+          )}
         </div>
         <div>
           <RecentActivities />

@@ -1,95 +1,175 @@
-import { Search, Filter, MoreHorizontal } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { CheckIcon, XIcon } from 'lucide-react';
+import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 
-const tableData = [
-  {
-    id: '#6458J-2',
-    category: 'Escritório',
-    date: '22/08/25',
-    product: 'Grampeador',
-    status: 'Aprovado',
-    statusColor: 'bg-green-100 text-green-800'
-  },
-  {
-    id: '#5343P-2',
-    category: 'Escritório',
-    date: '22/08/25',
-    product: 'Grampeador',
-    status: 'Pendente',
-    statusColor: 'bg-yellow-100 text-yellow-800'
-  },
-  {
-    id: '#2343L-6',
-    category: 'Escritório',
-    date: '22/08/25',
-    product: 'Grampeador',
-    status: 'Reprovado',
-    statusColor: 'bg-red-100 text-red-800'
-  }
-];
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
-const ApprovalTable = () => {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="p-6 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Fila de Aprovação Rápida</h3>
-        <div className="flex items-center space-x-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Procurar"
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
-          <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-            <Filter className="w-4 h-4" />
-            <span>Filtro</span>
-          </button>
+type PedidoPendente = {
+  id: number;
+  data: string;
+  solicitante: string;
+  unidadeAdmin?: string;
+  qtdItens?: number;
+  valor?: number;
+  [key: string]: any;
+};
+
+export default function QuickApprovalTable() {
+  const { pedidosPendentes, refetchAllData } = useData();
+  const { token, user } = useAuth();
+  const [loadingActions, setLoadingActions] = useState<Record<number, 'approve' | 'reject' | null>>({});
+
+  // Redundância de segurança: só renderiza se perfil for 1 ou 2
+  const canSee = useMemo(() => {
+    if (!user) return false;
+    const perfilNum = Number(user.perfil);
+    return perfilNum === 1 || perfilNum === 2;
+  }, [user]);
+
+  if (!canSee) return null;
+
+  const recentOrders = (pedidosPendentes || [])
+    .slice(0, 5)
+    .map((pedido: PedidoPendente) => ({
+      id: pedido.id,
+      numero: pedido.id,
+      solicitante: pedido.solicitante,
+      dataCriacao: pedido.data,
+      valorTotal: pedido.valor,
+    }));
+
+  const handleStatusUpdate = async (orderId: number, newStatus: number, actionType: 'approve' | 'reject') => {
+    if (!token) return;
+
+    setLoadingActions(prev => ({ ...prev, [orderId]: actionType }));
+
+    try {
+      const response = await fetch(`${API_BASE}/pedido/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao atualizar status do pedido');
+      }
+
+      await refetchAllData();
+    } catch (error) {
+      console.error('Erro ao atualizar pedido:', error);
+    } finally {
+      setLoadingActions(prev => ({ ...prev, [orderId]: null }));
+    }
+  };
+
+  const handleApprove = (orderId: number) => handleStatusUpdate(orderId, 1, 'approve');
+  const handleReject = (orderId: number) => handleStatusUpdate(orderId, 2, 'reject');
+
+  if (!recentOrders.length) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-6">
+        <h3 className="mb-4 text-lg font-medium text-gray-900">Aprovação Rápida</h3>
+        <div className="py-8 text-center text-sm text-gray-500">
+          Não há pedidos pendentes para aprovação.
         </div>
       </div>
-      
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-6">
+      <h3 className="mb-4 text-lg font-medium text-gray-900">Aprovação Rápida</h3>
+
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <input type="checkbox" className="rounded border-gray-300" />
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Nº do Pedido
               </th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Id</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Solicitante
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Data
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                Valor
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+                Ações
+              </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {tableData.map((row, index) => (
-              <tr key={index} className={index % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
-                <td className="py-4 px-6">
-                  <input type="checkbox" className="rounded border-gray-300" />
-                </td>
-                <td className="py-4 px-6 text-sm font-medium text-gray-900">{row.id}</td>
-                <td className="py-4 px-6 text-sm text-gray-600">{row.category}</td>
-                <td className="py-4 px-6 text-sm text-gray-600">{row.date}</td>
-                <td className="py-4 px-6 text-sm text-gray-600">{row.product}</td>
-                <td className="py-4 px-6">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.statusColor}`}>
-                    {row.status}
-                  </span>
-                </td>
-                <td className="py-4 px-6">
-                  <button className="text-gray-400 hover:text-gray-600">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+          <tbody className="divide-y divide-gray-200 bg-white">
+            {recentOrders.map((order) => {
+              const isLoading = loadingActions[order.id];
+              return (
+                <tr key={order.id} className="hover:bg-gray-50">
+                  <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900">
+                    #{order.numero || order.id}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
+                    {order.solicitante}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
+                    {order.dataCriacao
+                      ? new Date(order.dataCriacao).toLocaleDateString('pt-BR')
+                      : '-'}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
+                    {order.valorTotal?.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    }) || 'R$ 0,00'}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 text-center text-sm">
+                    <div className="flex justify-center space-x-2">
+                      <button
+                        onClick={() => handleApprove(order.id)}
+                        disabled={!!isLoading}
+                        className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                          isLoading === 'approve'
+                            ? 'bg-green-100 text-green-600 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
+                        }`}
+                      >
+                        {isLoading === 'approve' ? (
+                          <div className="h-3 w-3 animate-spin rounded-full border border-green-600 border-t-transparent" />
+                        ) : (
+                          <CheckIcon className="h-3 w-3" />
+                        )}
+                        <span className="ml-1">Aprovar</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleReject(order.id)}
+                        disabled={!!isLoading}
+                        className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                          isLoading === 'reject'
+                            ? 'bg-red-100 text-red-600 cursor-not-allowed'
+                            : 'bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2'
+                        }`}
+                      >
+                        {isLoading === 'reject' ? (
+                          <div className="h-3 w-3 animate-spin rounded-full border border-red-600 border-t-transparent" />
+                        ) : (
+                          <XIcon className="h-3 w-3" />
+                        )}
+                        <span className="ml-1">Reprovar</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
   );
-};
-
-export default ApprovalTable;
+}
