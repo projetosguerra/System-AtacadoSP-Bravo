@@ -3,14 +3,15 @@ import { User } from '../types';
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: User | null;   
-  allUsers: User[];  
+  user: User | null;
+  token: string | null;
+  allUsers: User[];
   isLoading: boolean;
-  login: (email: any, password: any) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   register: (primeiro_nome: string, ultimo_nome: string, email: string, password: string, genero: string, telefone: string) => Promise<void>;
   logout: () => void;
-  fetchAllUsers: () => Promise<void>; 
-  switchUserForTesting: (codUsuario: number) => void; 
+  fetchAllUsers: () => Promise<void>;
+  switchUserForTesting: (codUsuario: number) => void;
   error?: string;
 }
 
@@ -20,13 +21,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    const userData = localStorage.getItem('userData');
-    if (token && userData) {
-      setUser(JSON.parse(userData));
-    }
+    const storedToken = localStorage.getItem('authToken');
+    const storedUser = localStorage.getItem('userData');
+    if (storedToken) setToken(storedToken);
+    if (storedUser) setUser(JSON.parse(storedUser));
     setIsLoading(false);
   }, []);
 
@@ -41,14 +42,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     localStorage.setItem('authToken', data.token);
     localStorage.setItem('userData', JSON.stringify(data.user));
+    setToken(data.token);
     setUser(data.user);
   };
 
   const register = async (primeiro_nome: string, ultimo_nome: string, email: string, password: string, genero: string, telefone: string) => {
     const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primeiro_nome, ultimo_nome, email, senha: password, genero, telefone }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ primeiro_nome, ultimo_nome, email, senha: password, genero, telefone }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Falha no cadastro');
@@ -59,6 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('userData');
     setUser(null);
     setAllUsers([]);
+    setToken(null);
   };
 
   const fetchAllUsers = useCallback(async () => {
@@ -72,18 +75,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAllUsers([]);
     }
   }, []);
-  
+
   const switchUserForTesting = (codUsuario: number) => {
     const newUser = allUsers.find(u => u.codUsuario === codUsuario);
     if (newUser) {
       setUser(newUser);
+      localStorage.setItem('userData', JSON.stringify(newUser));
     }
   };
 
-  const isAuthenticated = !!user && !!localStorage.getItem('authToken');
+  const isAuthenticated = !!user && !!token;
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, allUsers, login, register, logout, isLoading, fetchAllUsers, switchUserForTesting }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        user,
+        token,
+        allUsers,
+        login,
+        register,
+        logout,
+        isLoading,
+        fetchAllUsers,
+        switchUserForTesting
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

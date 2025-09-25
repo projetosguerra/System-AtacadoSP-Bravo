@@ -1,20 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import StatsCard from '../components/StatsCard';
 import VolumeChart from '../components/LineChart';
 import StatusChart from '../components/DonutChart';
-import ApprovalTable from '../components/QuickApprovalTable';
+import QuickApprovalTable from '../components/QuickApprovalTable';
 import RecentActivities from '../components/RecentActivities';
 import { DollarSign, Package, AlertTriangle, Clock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { hasAnyRole } from '../utils/roles';
 
 const DashboardPage = () => {
+  const { user } = useAuth();
   const [novosPedidos, setNovosPedidos] = useState<number | string>('...');
+
+  // Debug temporário:
+  console.log('[DEBUG USER PERFIL]', user?.perfil, 'tipoUsuario:', user?.tipoUsuario);
+
+  const canSeeApprovalTable = useMemo(
+    () => hasAnyRole(user, ['ADMIN', 'APROVADOR']),
+    [user]
+  );
 
   useEffect(() => {
     fetch('https://jsonplaceholder.typicode.com/todos')
       .then(response => response.json())
-      .then(data => {
-        setNovosPedidos(data.length);
-      })
+      .then(data => setNovosPedidos(data.length))
       .catch(error => {
         console.error("Erro ao buscar dados da API:", error);
         setNovosPedidos(0);
@@ -63,10 +72,10 @@ const DashboardPage = () => {
         <StatusChart />
       </div>
 
-      {/* Table and Activities */}
+        {/* Table and Activities */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <ApprovalTable />
+          {canSeeApprovalTable && <QuickApprovalTable />}
         </div>
         <div>
           <RecentActivities />
@@ -74,7 +83,6 @@ const DashboardPage = () => {
       </div>
     </main>
   );
-}
-
+};
 
 export default DashboardPage;
