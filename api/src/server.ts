@@ -8,6 +8,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { loggingMiddleware } from './middleware/loggingMiddleware.js';
 import { cacheControlMiddleware } from './middleware/cacheControlMiddleware.js';
+import ordersRouter from './routes/orders.routes.js';
 
 console.log('--- [FASE 1 de 4] Início do arquivo server.ts ---');
 
@@ -28,6 +29,8 @@ app.use(cors());
 app.use(express.json());
 app.use(loggingMiddleware);
 app.use('/api', cacheControlMiddleware);
+
+app.use('/api/orders', ordersRouter);
 
 const dbConfig = {
     user: process.env.DB_USER,

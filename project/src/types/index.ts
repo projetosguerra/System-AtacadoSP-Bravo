@@ -54,6 +54,7 @@ export interface FinancialData {
 }
 
 export interface Product {
+  categoria: string;
   id: number;
   nome: string;
   descricao: string;

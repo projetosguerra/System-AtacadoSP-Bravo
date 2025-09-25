@@ -1,95 +1,94 @@
-import { Search, Filter, MoreHorizontal } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { fetchPendingApprovals, PendingOrder } from '../services/orders';
+import { useAuth } from '../context/AuthContext';
 
-const tableData = [
-  {
-    id: '#6458J-2',
-    category: 'Escritório',
-    date: '22/08/25',
-    product: 'Grampeador',
-    status: 'Aprovado',
-    statusColor: 'bg-green-100 text-green-800'
-  },
-  {
-    id: '#5343P-2',
-    category: 'Escritório',
-    date: '22/08/25',
-    product: 'Grampeador',
-    status: 'Pendente',
-    statusColor: 'bg-yellow-100 text-yellow-800'
-  },
-  {
-    id: '#2343L-6',
-    category: 'Escritório',
-    date: '22/08/25',
-    product: 'Grampeador',
-    status: 'Reprovado',
-    statusColor: 'bg-red-100 text-red-800'
-  }
-];
+function getOrderDetailsPath(id: number) {
+  return `/pedido/${id}`;
+}
 
-const ApprovalTable = () => {
+export default function ApprovalTable() {
+  const { token, user } = useAuth();
+  const navigate = useNavigate();
+
+  const [rows, setRows] = useState<PendingOrder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSee = useMemo(() => {
+    const perfil = user?.perfil;
+    return Number(perfil) === 1 || Number(perfil) === 2;
+  }, [user]);
+
+  useEffect(() => {
+    if (!canSee) return;
+    const abort = new AbortController();
+    setLoading(true);
+    setError(null);
+
+    fetchPendingApprovals({ token, limit: 5, includeInAnalysis: true, signal: abort.signal })
+      .then(setRows)
+      .catch((e) => setError(e.message || 'Erro ao carregar'))
+      .finally(() => setLoading(false));
+
+    return () => abort.abort();
+  }, [token, canSee]);
+
+  if (!canSee) return null;
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="p-6 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Fila de Aprovação Rápida</h3>
-        <div className="flex items-center space-x-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Procurar"
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
-          <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-            <Filter className="w-4 h-4" />
-            <span>Filtro</span>
-          </button>
-        </div>
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-medium text-gray-700">Fila de Aprovação Rápida</h3>
       </div>
-      
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <input type="checkbox" className="rounded border-gray-300" />
-              </th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Id</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {tableData.map((row, index) => (
-              <tr key={index} className={index % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
-                <td className="py-4 px-6">
-                  <input type="checkbox" className="rounded border-gray-300" />
-                </td>
-                <td className="py-4 px-6 text-sm font-medium text-gray-900">{row.id}</td>
-                <td className="py-4 px-6 text-sm text-gray-600">{row.category}</td>
-                <td className="py-4 px-6 text-sm text-gray-600">{row.date}</td>
-                <td className="py-4 px-6 text-sm text-gray-600">{row.product}</td>
-                <td className="py-4 px-6">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.statusColor}`}>
-                    {row.status}
-                  </span>
-                </td>
-                <td className="py-4 px-6">
-                  <button className="text-gray-400 hover:text-gray-600">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </td>
+
+      {loading ? (
+        <div className="py-6 text-sm text-gray-500">Carregando...</div>
+      ) : error ? (
+        <div className="py-6 text-sm text-red-600">{error}</div>
+      ) : rows.length === 0 ? (
+        <div className="py-6 text-sm text-gray-500">Sem pedidos pendentes.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead>
+              <tr className="text-gray-500">
+                <th className="px-2 py-2 font-medium">Pedido</th>
+                <th className="px-2 py-2 font-medium">Setor</th>
+                <th className="px-2 py-2 font-medium">Solicitante</th>
+                <th className="px-2 py-2 font-medium">Data</th>
+                <th className="px-2 py-2 font-medium">Total</th>
+                <th className="px-2 py-2 font-medium"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="px-2 py-2">
+                    <span className="font-medium text-gray-800">#{r.numero || r.id}</span>
+                  </td>
+                  <td className="px-2 py-2">{r.setor}</td>
+                  <td className="px-2 py-2">{r.solicitante}</td>
+                  <td className="px-2 py-2">
+                    {new Date(r.dataCriacao).toLocaleDateString('pt-BR')}
+                  </td>
+                  <td className="px-2 py-2">
+                    {r.total?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <button
+                      onClick={() => navigate(getOrderDetailsPath(r.id))}
+                      className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                    >
+                      Analisar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
-};
-
-export default ApprovalTable;
+}
