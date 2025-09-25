@@ -14,17 +14,20 @@ const OrderDetailPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
 
-  const updateStatusAPI = useCallback(async (newStatus: number, conditionStatus?: number) => {
-    try {
-      await fetch(`/api/pedido/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newStatus, conditionStatus }),
-      });
-    } catch (err) {
-      console.error(`Falha ao tentar mudar status para ${newStatus}:`, err);
-    }
-  }, [id]);
+  const updateStatusAPI = useCallback(
+    async (newStatus: number, conditionStatus?: number, motivo?: string) => {
+      try {
+        await fetch(`/api/pedido/${id}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newStatus, conditionStatus, motivo }),
+        });
+      } catch (err) {
+        console.error(`Falha ao tentar mudar status para ${newStatus}:`, err);
+      }
+    },
+    [id]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -45,8 +48,8 @@ const OrderDetailPage = () => {
         }
       } catch (err: any) {
         if (isMounted) {
-            setError(err.message);
-            setTimeout(() => navigate('/painel-aprovacao'), 3000);
+          setError(err.message);
+          setTimeout(() => navigate('/painel-aprovacao'), 3000);
         }
       } finally {
         if (isMounted) setIsLoading(false);
@@ -61,16 +64,66 @@ const OrderDetailPage = () => {
         updateStatusAPI(5, 3);
       }
     };
-  }, [id, updateStatusAPI, navigate, order?.status]); 
-  
-  const handleDecision = async (newStatus: number, _motivo?: string) => {
-    if (order) setOrder({ ...order, status: newStatus });
+  }, [id, updateStatusAPI, navigate, order?.status]);
 
-    await updateStatusAPI(newStatus, 3);
+  const [submitting, setSubmitting] = useState(false);
 
-    alert(`Pedido ${newStatus === 1 ? 'Aprovado' : 'Reprovado'} com sucesso!`);
-    await refetchAllData(); 
-    navigate('/painel-aprovacao');
+  async function handleApprove() {
+    if (submitting || !order) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/pedido/${order.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newStatus: 1,
+          conditionStatus: order.status
+        }),
+        cache: 'no-store'
+      });
+      await refetchAllData
+      if (res.status === 409) {
+        refetchAllData();
+        setError('Conflito: o pedido já foi atualizado. Recarregando...');
+        return;
+      }
+      if (!res.ok) throw new Error('Erro ao aprovar');
+      refetchAllData();
+      navigate('/painel-aprovacao');
+    } catch (err: any) {
+      setError(
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : String(err)
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const handleReprove = async (motivo: string) => {
+    setIsRejectModalOpen(true);
+    if (!motivo) {
+      alert('O motivo da reprovação é obrigatório.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateStatusAPI(2, undefined, motivo);
+
+      await refetchAllData();
+
+      navigate('/painel-aprovacao');
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.';
+      setError(`Falha ao tentar reprovar o pedido: ${errorMessage}`);
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+      setIsRejectModalOpen(false);
+    }
   };
 
   if (isLoading) return <div className="p-8 text-center">Carregando detalhes do pedido...</div>;
@@ -129,11 +182,19 @@ const OrderDetailPage = () => {
 
       {/* Ações do Aprovador */}
       <div className="bg-white p-4 rounded-lg shadow-sm border flex justify-end gap-4">
-        <button onClick={() => setIsRejectModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+        <button
+          onClick={() => setIsRejectModalOpen(true)}
+          disabled={submitting}
+          className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+        >
           <XCircle size={20} /> Reprovar
         </button>
-        <button onClick={() => handleDecision(1)} className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-          <CheckCircle size={20} /> Aprovar
+        <button
+          onClick={handleApprove}
+          disabled={submitting}
+          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+        >
+          <CheckCircle size={20} /> {submitting ? 'Aprovando...' : 'Aprovar'}
         </button>
       </div>
 
@@ -141,13 +202,12 @@ const OrderDetailPage = () => {
         isOpen={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
         orderInfo={{ id: order.id.toString(), solicitante: order.solicitante.nome }}
-        onConfirm={(motivo) => {
-          handleDecision(2, motivo);
-          setIsRejectModalOpen(false); 
+        onConfirm={async (motivo: string) => {
+          await handleReprove(motivo);
         }}
       />
     </div>
   );
-};
+}
 
 export default OrderDetailPage;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import StatsCard from '../components/StatsCard';
 import VolumeChart from '../components/LineChart';
 import StatusChart from '../components/DonutChart';
-import ApprovalTable from '../components/ApprovalTable';
+import ApprovalTable from '../components/QuickApprovalTable';
 import RecentActivities from '../components/RecentActivities';
 import { DollarSign, Package, AlertTriangle, Clock } from 'lucide-react';
 
