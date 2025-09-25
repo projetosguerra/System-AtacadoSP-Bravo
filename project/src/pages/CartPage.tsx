@@ -10,19 +10,25 @@ const CartPage: React.FC = () => {
     cartItems,
     isLoading,
     error,
-    updateQuantity,
+    updateQuantity, 
     removeFromCart,
     submitCart,
-    totalValue
+    totalValue,
+    sectorLimit,
+    sectorSpentValue,
+    sectorAvailableBalance,
+    cartWillExceedLimit
   } = useCart();
 
   const handleClearCart = () => {
     if (window.confirm('Tem certeza que deseja esvaziar o carrinho?')) {
-      Promise.all(cartItems.map(item => removeFromCart(Number(item.id))));
+      cartItems.forEach(item => removeFromCart(Number(item.id)));
     }
   };
 
-  if (isLoading) return <div className="text-center p-12">Carregando carrinho...</div>;
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  if (isLoading) return <div className="text-center p-12">A carregar carrinho...</div>;
   if (error) return <div className="text-center p-12 text-red-600">Erro ao carregar carrinho: {error}</div>;
 
   if (cartItems.length === 0) {
@@ -51,29 +57,51 @@ const CartPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Carrinho de Compras</h1>
+    <div className="p-8 bg-gray-50 min-h-screen">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Carrinho de Compras</h1>
         <Link to="/catalogo-produtos" className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors">
           <ArrowLeft className="w-4 h-4" />
           Continuar Comprando
         </Link>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <CartItemsTable
             items={cartItems}
-            onUpdateQuantity={updateQuantity} 
-            onRemoveItem={removeFromCart}   
+            onUpdateQuantity={updateQuantity}
+            onRemoveItem={removeFromCart}
           />
         </div>
-        <div className="lg:col-span-1">
-          <OrderSummary
-            items={cartItems}
-            total={totalValue} 
-            onSubmitOrder={submitCart} 
-            onClearCart={handleClearCart}
-          />
+        
+        <div className="space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h2 className="text-lg font-semibold mb-4 text-gray-800">Resumo do Orçamento do Setor</h2>
+                <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Limite Total:</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(sectorLimit)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Valor Já Gasto:</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(sectorSpentValue)}</span>
+                    </div>
+                    <hr/>
+                    <div className="flex justify-between font-bold">
+                        <span className="text-gray-600">Saldo Disponível:</span>
+                        <span className="text-green-600">{formatCurrency(sectorAvailableBalance)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <OrderSummary
+              total={totalValue}
+              availableBalance={sectorAvailableBalance}
+              willExceedLimit={cartWillExceedLimit}
+              onSubmitOrder={submitCart}
+              onClearCart={handleClearCart}
+            />
         </div>
       </div>
     </div>
@@ -81,4 +109,3 @@ const CartPage: React.FC = () => {
 };
 
 export default CartPage;
-

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { CartItem, Product } from '../types';
 import { useAuth } from './AuthContext';
 import { useData } from './DataContext';
@@ -7,12 +7,16 @@ interface CartContextType {
   cartItems: CartItem[];
   addToCart: (product: Product, quantity: number) => void;
   updateQuantity: (productId: number, newQuantity: number) => void;
-  removeFromCart: (productId: number) => void; 
+  removeFromCart: (productId: number) => void;
   submitCart: () => Promise<void>;
   isLoading: boolean;
   error: string | null;
   totalValue: number;
   totalItems: number;
+  sectorLimit: number;
+  sectorSpentValue: number;
+  sectorAvailableBalance: number;
+  cartWillExceedLimit: boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -29,6 +33,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { setores, financialData } = useData();
 
   const fetchCart = useCallback(async () => {
     if (!user) return;
@@ -58,6 +63,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addToCart = (product: Product, quantity: number) => {
     if (!user) return;
 
+    const newTotalValue = totalValue + (product.preco * quantity);
+    if (newTotalValue > sectorAvailableBalance) {
+      alert('Não foi possível adicionar o produto. O valor total do carrinho excederia o saldo disponível para o seu setor.');
+      return;
+    }
+
     const originalCart = [...cartItems];
     const existingItem = originalCart.find(item => item.id === product.id);
 
@@ -84,7 +95,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
 
     const originalCart = [...cartItems];
-   
+
     setCartItems(originalCart.filter(item => item.id !== productId));
 
     fetch(`/api/carrinho/${user.codUsuario}/items/${productId}`, {
@@ -106,9 +117,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     ));
 
     fetch(`/api/carrinho/${user.codUsuario}/items/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qt: newQuantity }),
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qt: newQuantity }),
     }).catch(err => {
       console.error("Falha otimista ao atualizar quantidade:", err);
       setCartItems(originalCart);
@@ -117,24 +128,45 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const submitCart = async () => {
-    if (!user) return;
+    if (!user || cartItems.length === 0) return;
+    if (cartWillExceedLimit) {
+      alert('Não é possível submeter o pedido pois o valor excede o saldo do seu setor.');
+      return;
+    }
     try {
       const response = await fetch(`/api/carrinho/${user.codUsuario}/submit`, { method: 'POST' });
-      if (!response.ok) throw new Error('Falha ao submeter pedido.');
-      setCartItems([]);
-      await refetchAllData();
-      alert('Pedido enviado para aprovação!');
-    } catch (error) {
-      console.error("Erro ao submeter carrinho:", error);
-      alert('Ocorreu um erro ao enviar o pedido.');
+      if (response.ok) {
+            setCartItems([]);
+            await refetchAllData();
+            alert('Pedido enviado para aprovação!');
+        } else {
+            const errorBody = await response.json();
+            throw new Error(errorBody.error || 'Erro ao submeter carrinho.');
+        }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Erro ao submeter carrinho.');
     }
   };
 
   const totalValue = cartItems.reduce((sum, item) => sum + (item.preco || 0) * (item.quantidade || 0), 0);
   const itemCount = cartItems.length;
 
+  const { sectorLimit, sectorSpentValue, sectorAvailableBalance } = useMemo(() => {
+    if (!user || !user.codSetor || setores.length === 0 || !financialData) {
+      return { sectorLimit: 0, sectorSpentValue: 0, sectorAvailableBalance: 0 };
+    }
+    const currentUserSector = setores.find(s => s.CODSETOR === user.codSetor);
+    const limit = currentUserSector?.SALDO || 0;
+    const spent = financialData.gastosPorSetor.find(g => g.CODSETOR === user.codSetor)?.GASTO_TOTAL || 0;
+    const available = limit - spent;
+    return { sectorLimit: limit, sectorSpentValue: spent, sectorAvailableBalance: available };
+  }, [user, setores, financialData]);
+
+  const cartWillExceedLimit = totalValue > sectorAvailableBalance;
+
   const value = { cartItems, isLoading, error, totalValue, totalItems: itemCount, addToCart, updateQuantity, removeFromCart, submitCart };
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return <CartContext.Provider value={{ ...value, sectorLimit, sectorSpentValue, sectorAvailableBalance, cartWillExceedLimit }}>{children}</CartContext.Provider>;
 };
 
