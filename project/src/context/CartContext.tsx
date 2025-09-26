@@ -28,7 +28,7 @@ export const useCart = () => {
 };
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { refetchAllData } = useData();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -134,15 +134,24 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     try {
-      const response = await fetch(`/api/carrinho/${user.codUsuario}/submit`, { method: 'POST' });
+      const idemKey = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      const response = await fetch(`/api/carrinho/${user.codUsuario}/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idemKey,
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ /* dados do pedido */ })
+      });
       if (response.ok) {
-            setCartItems([]);
-            await refetchAllData();
-            alert('Pedido enviado para aprovação!');
-        } else {
-            const errorBody = await response.json();
-            throw new Error(errorBody.error || 'Erro ao submeter carrinho.');
-        }
+        setCartItems([]);
+        await refetchAllData();
+        alert('Pedido enviado para aprovação!');
+      } else {
+        const errorBody = await response.json();
+        throw new Error(errorBody.error || 'Erro ao submeter carrinho.');
+      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Erro ao submeter carrinho.');

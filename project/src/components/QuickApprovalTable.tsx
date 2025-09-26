@@ -1,13 +1,10 @@
-import { useState, useMemo } from 'react';
-import { CheckIcon, XIcon } from 'lucide-react';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { hasAnyRole } from '../utils/roles';
-
-const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 type PedidoPendenteLocal = {
-  id: number;
+  id: number | string;
   data: string;
   solicitante: string;
   unidadeAdmin?: string;
@@ -17,55 +14,31 @@ type PedidoPendenteLocal = {
 };
 
 export default function QuickApprovalTable() {
-  const { pedidosPendentes, refetchAllData } = useData();
-  const { token, user } = useAuth();
-  const [loadingActions, setLoadingActions] = useState<Record<number, 'approve' | 'reject' | null>>({});
+  const { pedidosPendentes } = useData();
+  const { user } = useAuth();
 
-  const canSee = useMemo(() => hasAnyRole(user, ['ADMIN', 'APROVADOR']), [user]);
+  const canSee = useMemo(() => {
+    if (!user) return false;
+    const perfil = (user as any).perfil;
+    const tipo = Number((user as any).tipoUsuario);
+    return perfil === 'Admin' || perfil === 'Aprovador' || tipo === 1 || tipo === 2;
+  }, [user]);
+
   if (!canSee) return null;
 
-  const recentOrders = (pedidosPendentes || [])
-    .slice(0, 5)
-    .map((pedido: PedidoPendenteLocal) => ({
-      id: pedido.id,
-      numero: pedido.id,
-      solicitante: pedido.solicitante,
-      dataCriacao: pedido.data,
-      valorTotal: pedido.valor,
-    }));
+  const recentOrders: PedidoPendenteLocal[] = (pedidosPendentes || []).slice(0, 5);
 
-  const handleStatusUpdate = async (orderId: number, newStatus: number, actionType: 'approve' | 'reject') => {
-    if (!token) {
-      console.warn('Sem token, não é possível atualizar status.');
-      return;
-    }
-
-    setLoadingActions(prev => ({ ...prev, [orderId]: actionType }));
-
-    try {
-      const response = await fetch(`${API_BASE}/pedido/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao atualizar status do pedido');
-      }
-
-      await refetchAllData();
-    } catch (error) {
-      console.error('Erro ao atualizar pedido:', error);
-    } finally {
-      setLoadingActions(prev => ({ ...prev, [orderId]: null }));
-    }
+  const formatCurrency = (value?: number) => {
+    if (typeof value !== 'number' || isNaN(value)) return 'R$ 0,00';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
-  const handleApprove = (orderId: number) => handleStatusUpdate(orderId, 1, 'approve');
-  const handleReject = (orderId: number) => handleStatusUpdate(orderId, 2, 'reject');
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '-';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
 
   if (!recentOrders.length) {
     return (
@@ -79,92 +52,61 @@ export default function QuickApprovalTable() {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6">
-      <h3 className="mb-4 text-lg font-medium text-gray-900">Aprovação Rápida</h3>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      {/* Header opcional do card */}
+      <div className="px-6 py-4 border-b border-gray-200">
+        <h3 className="text-lg font-medium text-gray-900">Aprovação Rápida</h3>
+      </div>
 
+      {/* Tabela alinhada ao PendingOrdersTable */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Nº do Pedido
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Solicitante
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Data
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Valor
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
-                Ações
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">N/S</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uni. Adm.</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QTD de Itens</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
-            {recentOrders.map((order) => {
-              const isLoading = loadingActions[order.id];
-              return (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900">
-                    #{order.numero || order.id}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
-                    {order.solicitante}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
-                    {order.dataCriacao
-                      ? new Date(order.dataCriacao).toLocaleDateString('pt-BR')
-                      : '-'}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-900">
-                    {order.valorTotal?.toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    }) || 'R$ 0,00'}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-4 text-center text-sm">
-                    <div className="flex justify-center space-x-2">
-                      <button
-                        onClick={() => handleApprove(order.id)}
-                        disabled={!!isLoading}
-                        className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                          isLoading === 'approve'
-                            ? 'bg-green-100 text-green-600 cursor-not-allowed'
-                            : 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
-                        }`}
-                      >
-                        {isLoading === 'approve' ? (
-                          <div className="h-3 w-3 animate-spin rounded-full border border-green-600 border-t-transparent" />
-                        ) : (
-                          <CheckIcon className="h-3 w-3" />
-                        )}
-                        <span className="ml-1">Aprovar</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleReject(order.id)}
-                        disabled={!!isLoading}
-                        className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                          isLoading === 'reject'
-                            ? 'bg-red-100 text-red-600 cursor-not-allowed'
-                            : 'bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2'
-                        }`}
-                      >
-                        {isLoading === 'reject' ? (
-                          <div className="h-3 w-3 animate-spin rounded-full border border-red-600 border-t-transparent" />
-                        ) : (
-                          <XIcon className="h-3 w-3" />
-                        )}
-                        <span className="ml-1">Reprovar</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+          <tbody className="bg-white divide-y divide-gray-200">
+            {recentOrders.map((pedido, index) => (
+              <tr key={pedido.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {String(index + 1).padStart(2, '0')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatDate(pedido.data)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                  {pedido.id}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {pedido.solicitante}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                  {pedido.unidadeAdmin || '-'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                  {typeof pedido.qtdItens === 'number' ? pedido.qtdItens : '-'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                  {formatCurrency(pedido.valor)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <Link
+                    to={`/pedido/${pedido.id}`}
+                    className="inline-flex items-center px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Analisar
+                  </Link>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

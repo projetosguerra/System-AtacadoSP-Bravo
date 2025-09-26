@@ -30,18 +30,29 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     },
   };
 
+  function uniqueById<T extends { id: number | string }>(arr: T[]): T[] {
+    const map = new Map<string | number, T>();
+    for (const item of arr) {
+      if (!map.has(item.id)) map.set(item.id, item);
+    }
+    return Array.from(map.values());
+  }
+
   const fetchPendingOrders = async () => {
     const response = await fetch('/api/pedidos/pendentes', fetchOptions);
     if (!response.ok) throw new Error('Falha ao buscar pedidos pendentes');
     const data = await response.json();
     setPedidosPendentes(data);
+    console.log('[RAW pendentes ids]', data.map((p: any) => p.id));
+    setPedidosPendentes(uniqueById(data));
   };
 
   const fetchOrdersHistory = async () => {
     const response = await fetch('/api/pedidos/historico', fetchOptions);
     if (!response.ok) throw new Error('Falha ao buscar histórico de pedidos');
     const data = await response.json();
-    setOrders(data);
+    console.log('[RAW historico ids]', data.map((p: any) => p.id));
+    setOrders(uniqueById(data));
   };
 
   const fetchFinancialData = async () => {
@@ -57,7 +68,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const data = await response.json();
     setSetores(data);
   };
-  
+
   const refetchAllData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
