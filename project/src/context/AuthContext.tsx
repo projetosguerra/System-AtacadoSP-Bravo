@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const switchUserForTesting = (codUsuario: number) => {
-    const newUser = allUsers.find(u => u.codUsuario === codUsuario);
+    const newUser = allUsers.find((u: any) => Number((u as any).codUsuario) === Number(codUsuario));
     if (newUser) {
       setUser(newUser);
       localStorage.setItem('userData', JSON.stringify(newUser));
@@ -98,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         isLoading,
         fetchAllUsers,
-        switchUserForTesting
+        switchUserForTesting,
       }}
     >
       {children}

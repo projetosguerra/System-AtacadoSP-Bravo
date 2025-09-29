@@ -6,6 +6,7 @@
     "target": "esnext",
     "types": [],
     "lib": ["esnext"],
+    "moduleResolution": "nodenext",
     // "types": ["node"],
     // and npm install -D @types/node
 
