@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "compression": "^1.8.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.8.1"
+  }
+}

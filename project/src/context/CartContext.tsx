@@ -69,6 +69,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
+    const limitsLoaded = !!(user?.codSetor && Array.isArray(setores) && setores.length && financialData);
+    if (limitsLoaded && newTotalValue > sectorAvailableBalance) {
+      console.warn('[BUDGET] Projeção acima do saldo. totalProj:', newTotalValue, 'saldoDisp:', sectorAvailableBalance);
+      // Opcional: só avisar, não bloquear. Se quiser bloquear, mantenha o return:
+      // return;
+    }
+
     const originalCart = [...cartItems];
     const existingItem = originalCart.find(item => item.id === product.id);
 
@@ -78,6 +85,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ));
     } else {
       setCartItems([...originalCart, { ...product, quantidade: quantity }]);
+    }
+
+    if (limitsLoaded && cartWillExceedLimit) {
+      alert('Não é possível submeter: valor excede o saldo do setor.');
+      return;
     }
 
     fetch(`/api/carrinho/${user.codUsuario}/items`, {
