@@ -7,6 +7,7 @@ import carrinho from './carrinho.js';
 import usuarios from './usuarios.js';
 import setores from './setores.js';
 import financeiro from './financeiro.js';
+import dev from './dev.js'; 
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use(carrinho);
 router.use(usuarios);
 router.use(setores);
 router.use(financeiro);
+router.use(dev); //
 
 export default router;
