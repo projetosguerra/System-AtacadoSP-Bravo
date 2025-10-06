@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown, RefreshCw } from 'lucide-react';
 import { HistoricalOrder } from '../types';
 
 interface OrdersHistoryTableProps {
@@ -13,6 +13,9 @@ interface OrdersHistoryTableProps {
   totalOrders: number;             // ignorado (calculamos localmente)
   onPageChange: (page: number) => void;
   itemsPerPage: number;
+  // novos
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 type SortKey = 'data' | 'id' | 'setor';
@@ -26,12 +29,13 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   onFilterChange,
   currentPage,
   onPageChange,
-  itemsPerPage
+  itemsPerPage,
+  onRefresh,
+  refreshing
 }) => {
   const [sortKey, setSortKey] = useState<SortKey>('data');
   const [sortDir, setSortDir] = useState<SortDir>('desc'); // mais recente primeiro
 
-  // Mapeia mais status para evitar "Desconhecido"
   const statusMap = {
     1: { text: 'Aprovado', color: 'green' },
     2: { text: 'Reprovado', color: 'red' },
@@ -73,7 +77,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
     );
   };
 
-  // 1) Deduplicar por id (defensivo)
   const uniqueOrders = useMemo(() => {
     const map = new Map<number | string, HistoricalOrder>();
     for (const o of orders || []) {
@@ -82,7 +85,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
     return Array.from(map.values());
   }, [orders]);
 
-  // 2) Filtro por busca e status (já veio filtrado do pai, mas mantemos por segurança)
   const filteredOrders = useMemo(() => {
     const byStatus = (o: HistoricalOrder) => {
       if (filterStatus === 'todos') return true;
@@ -104,7 +106,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
     return uniqueOrders.filter(o => byStatus(o) && bySearch(o));
   }, [uniqueOrders, filterStatus, searchTerm]);
 
-  // 3) Ordenação
   const sortedOrders = useMemo(() => {
     const arr = [...filteredOrders];
     arr.sort((a, b) => {
@@ -125,12 +126,10 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
     return arr;
   }, [filteredOrders, sortKey, sortDir]);
 
-  // 4) Paginação local (a partir do resultado ordenado)
   const totalOrdersLocal = sortedOrders.length;
   const totalPagesLocal = Math.max(1, Math.ceil(totalOrdersLocal / itemsPerPage));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPagesLocal);
 
-  // Se o pai estiver em uma página inválida (ex.: filtrou e o total caiu), sincroniza para a válida
   useEffect(() => {
     if (currentPage !== safeCurrentPage) {
       onPageChange(safeCurrentPage);
@@ -144,7 +143,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   const startItem = totalOrdersLocal === 0 ? 0 : startIndex + 1;
   const endItem = Math.min(endIndex, totalOrdersLocal);
 
-  // Números de página (1, 2, 3 …)
   const maxButtons = 7;
   const half = Math.floor(maxButtons / 2);
   let startBtn = Math.max(1, safeCurrentPage - half);
@@ -210,6 +208,19 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
               <option value="asc">Ascendente</option>
             </select>
           </div>
+
+          {/* Atualizar */}
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={!!refreshing}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              title="Atualizar apenas a tabela"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Atualizar
+            </button>
+          )}
         </div>
       </div>
 

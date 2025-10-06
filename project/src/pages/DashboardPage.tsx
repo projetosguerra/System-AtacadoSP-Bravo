@@ -3,6 +3,7 @@ import StatsCard from '../components/StatsCard';
 import VolumeChart from '../components/LineChart';
 import StatusChart from '../components/DonutChart';
 import QuickApprovalTable from '../components/QuickApprovalTable';
+import SectorOrdersTable from '../components/SectorOrdersTable';
 import RecentActivities from '../components/RecentActivities';
 import { DollarSign, Package, AlertTriangle, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -114,7 +115,6 @@ const DashboardPage = () => {
         ? 'igual ao mês passado'
         : `${approvedPercent.toFixed(1)}% ${approvedDelta > 0 ? 'a mais' : 'a menos'} que o mês passado`;
 
-  // KPI 3: Novos Pedidos (semana) – mantém
   const newOrdersCurr = useMemo(() => {
     const hist = (orders || []).filter(o => {
       const t = o?.data ? dayTs(o.data as any) : NaN;
@@ -192,10 +192,10 @@ const DashboardPage = () => {
         <StatusChart />
       </div>
 
-      {/* Table and Activities */}
+      {/* Tabela e Atividades */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          {canSeeApprovalTable && <QuickApprovalTable />}
+          {canSeeApprovalTable ? <QuickApprovalTable /> : <SectorOrdersTable />}
         </div>
         <div>
           <RecentActivities />

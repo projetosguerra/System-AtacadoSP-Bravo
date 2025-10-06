@@ -11,6 +11,7 @@ interface DataContextType {
   error: string | null;
   refetchAllData: () => Promise<void>;
   updateSetorLimit: (codsetor: number, newLimit: number) => Promise<void>;
+  refreshFinancial?: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -34,26 +35,39 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return Array.from(map.values());
   }
 
+  // Janelas mais leves
+  const PENDENTES_QS = '?days=45&maxrows=200';
+  const HIST_QS      = '?days=45&maxrows=400';
+  const FIN_QS       = '?days=14&maxOrders=300';
+
   const fetchPendingOrders = async () => {
-    const response = await fetch('/api/pedidos/pendentes', fetchOptions);
+    const response = await fetch(`/api/pedidos/pendentes${PENDENTES_QS}`, fetchOptions);
     if (!response.ok) throw new Error('Falha ao buscar pedidos pendentes');
     const data = await response.json();
     setPedidosPendentes(Array.isArray(data) ? uniqueById(data) : []);
   };
 
   const fetchOrdersHistory = async () => {
-    const response = await fetch('/api/pedidos/historico', fetchOptions);
+    const response = await fetch(`/api/pedidos/historico${HIST_QS}`, fetchOptions);
     if (!response.ok) throw new Error('Falha ao buscar histórico de pedidos');
     const data = await response.json();
     setOrders(Array.isArray(data) ? uniqueById(data) : []);
   };
 
   const fetchFinancialData = async () => {
-    const response = await fetch('/api/financeiro', fetchOptions);
+    const response = await fetch(`/api/financeiro${FIN_QS}`, fetchOptions);
     if (!response.ok) throw new Error('Falha ao buscar dados financeiros');
     const data = await response.json();
     setFinancialData(data);
   };
+
+  const refreshFinancial = useCallback(async () => {
+    try {
+      await fetchFinancialData();
+    } catch (e) {
+      // mantém último valor ou null
+    }
+  }, []);
 
   const fetchSetores = async () => {
     const response = await fetch('/api/setores', fetchOptions);
@@ -66,21 +80,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     setError(null);
     try {
-      // 1) Primários para o dashboard
+      // 1) Essencial primeiro
       await fetchSetores();
-      try {
-        await fetchPendingOrders();
-      } catch (e) {
-        console.warn('[Data] pendentes falhou na primeira tentativa, tentando novamente em 2s...');
-        setTimeout(() => {
-          fetchPendingOrders().catch(err => console.error('[Data] pendentes retry falhou:', err));
-        }, 2000);
-      }
+      await fetchPendingOrders();
 
-      // 2) Background (não bloqueia a tela)
+      // 2) Background controlado: usuários e histórico
       fetchAllUsers?.().catch(() => {});
-      fetchFinancialData().catch(err => console.error('[Data] financeiro bg erro:', err));
       fetchOrdersHistory().catch(err => console.error('[Data] historico bg erro:', err));
+
+      // 3) Financeiro com mais atraso e janela pequena
+      setTimeout(() => {
+        fetchFinancialData().catch(err => console.error('[Data] financeiro bg erro:', err));
+      }, 2000);
     } catch (err: any) {
       setError(err.message || 'Falha ao carregar dados iniciais.');
     } finally {
@@ -112,7 +123,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       prev.map(s => (Number(s.CODSETOR) === Number(codsetor) ? ({ ...s, SALDO: saldo } as Setor) : s))
     );
 
-    await fetchFinancialData();
+    await fetchFinancialData().catch(() => {});
   }, [user]);
 
   return (
@@ -126,6 +137,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         error,
         refetchAllData,
         updateSetorLimit,
+        refreshFinancial,
       }}
     >
       {children}

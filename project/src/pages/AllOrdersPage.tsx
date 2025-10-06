@@ -7,27 +7,43 @@ import { useData } from '../context/DataContext';
 const AllOrdersPage: React.FC = () => {
   const { orders, isLoading } = useData();
 
+  const [ordersLocal, setOrdersLocal] = useState(orders || []);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => setOrdersLocal(orders || []), [orders]);
+
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
-  // Sempre que filtro ou busca mudarem, volte para a 1ª página
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus]);
 
-  // A página continua calculando os KPIs com base no mesmo critério de filtro/busca
   const filteredOrders = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
-    return (orders || [])
+    return (ordersLocal || [])
       .filter(o => filterStatus === 'todos' || String(o.status) === filterStatus)
       .filter(o =>
         term
           ? Object.values(o).some(v => String(v ?? '').toLowerCase().includes(term))
           : true
       );
-  }, [orders, searchTerm, filterStatus]);
+  }, [ordersLocal, searchTerm, filterStatus]);
+
+  async function refreshOrdersTable() {
+    setRefreshing(true);
+    try {
+      const resp = await fetch('/api/pedidos/historico?days=45&maxrows=400', { headers: { 'Cache-Control': 'no-cache' } });
+      if (!resp.ok) throw new Error('Falha ao atualizar histórico');
+      const data = await resp.json();
+      setOrdersLocal(Array.isArray(data) ? data : []);
+    } catch (e) {
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const kpiData: KpiData[] = [
     {
@@ -39,7 +55,7 @@ const AllOrdersPage: React.FC = () => {
       title: 'Valor Aprovado',
       value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
         filteredOrders
-          .filter(o => o.status === 1) // Aprovado
+          .filter(o => o.status === 1)
           .reduce((sum, o) => sum + (Number(o.valorTotal) || 0), 0)
       ),
       subtitle: 'Soma dos pedidos aprovados',
@@ -55,7 +71,7 @@ const AllOrdersPage: React.FC = () => {
     },
     {
       title: 'Pedidos Pendentes',
-      value: filteredOrders.filter(o => o.status === 5).length, // Pendente
+      value: filteredOrders.filter(o => o.status === 5).length,
       subtitle: 'Aguardando análise',
     },
   ];
@@ -75,7 +91,6 @@ const AllOrdersPage: React.FC = () => {
       </div>
 
       <OrdersHistoryTable
-        // IMPORTANTE: passe a LISTA COMPLETA filtrada (sem slice)
         orders={filteredOrders}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
@@ -83,10 +98,11 @@ const AllOrdersPage: React.FC = () => {
         onFilterChange={setFilterStatus}
         currentPage={currentPage}
         onPageChange={setCurrentPage}
-        // Estes dois não são usados pela tabela (ela calcula localmente), mas mantemos a assinatura:
         totalPages={Math.ceil(filteredOrders.length / itemsPerPage)}
         totalOrders={filteredOrders.length}
         itemsPerPage={itemsPerPage}
+        refreshing={refreshing}
+        onRefresh={refreshOrdersTable}
       />
     </div>
   );

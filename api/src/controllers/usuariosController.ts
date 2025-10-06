@@ -1,9 +1,14 @@
 import oracledb from 'oracledb';
 import bcrypt from 'bcrypt';
 import { withConnection } from '../db/pool.js';
+import { getCache, setCache } from '../utils/cache.js';
 
 export const listarUsuarios = async (_req: any, res: any) => {
   const codcli = 27995;
+  const cacheKey = 'usuarios:list:v1';
+  const cached = getCache<any[]>(cacheKey);
+  if (cached) return res.json(cached);
+
   try {
     const users = await withConnection(async (connection) => {
       const result = await connection.execute(
@@ -13,7 +18,7 @@ export const listarUsuarios = async (_req: any, res: any) => {
          FROM BRAMV_USUARIOS U 
          LEFT JOIN BRAMV_SETOR S ON U.CODSETOR = S.CODSETOR
          WHERE U.CODCLI = :codcli`,
-        { codcli }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        { codcli }, { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 100 }
       );
 
       return (result.rows || []).map((user: any) => ({
@@ -30,6 +35,8 @@ export const listarUsuarios = async (_req: any, res: any) => {
         perfil: user.TIPOUSUARIO === 1 ? 'Admin' : (user.TIPOUSUARIO === 2 ? 'Aprovador' : 'Solicitante')
       }));
     });
+
+    setCache(cacheKey, users, 30_000); // 30s
     res.json(users);
   } catch (err) {
     console.error('ERRO AO BUSCAR USUÁRIOS:', err);

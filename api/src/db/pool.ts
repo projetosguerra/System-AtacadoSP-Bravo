@@ -16,8 +16,6 @@ function printConnectDiagnostics() {
   if (cs) {
     if (looksLikeAlias(cs)) {
       console.warn('  - DB_CONNECT_STRING parece um alias TNS. Sem TNS_ADMIN, o Thin driver não vai resolver.');
-      console.warn('    Solução 1: Use Easy Connect (host:port/service_name).');
-      console.warn('    Solução 2: Configure TNS_ADMIN apontando para sua pasta com tnsnames.ora.');
     } else {
       console.info('  - DB_CONNECT_STRING parece Easy Connect (host:port/service).');
     }
@@ -52,23 +50,35 @@ export async function initPool() {
     user,
     password,
     connectString,
-    poolMin: Number(process.env.DB_POOL_MIN || 2),
-    poolMax: Number(process.env.DB_POOL_MAX || 5),
-    poolIncrement: Number(process.env.DB_POOL_INC || 1),
-    queueTimeout: Number(process.env.DB_QUEUE_TIMEOUT || 45000),
-    stmtCacheSize: Number(process.env.DB_STMT_CACHE || 50),
+    poolMin: Number(process.env.DB_POOL_MIN ?? 0),
+    poolMax: Number(process.env.DB_POOL_MAX ?? 20),     
+    poolIncrement: Number(process.env.DB_POOL_INC ?? 2),
+    queueTimeout: Number(process.env.DB_QUEUE_TIMEOUT ?? 10000), 
+    stmtCacheSize: Number(process.env.DB_STMT_CACHE ?? 50),
   });
 
   console.info('[DB] Connection pool initialized');
   return pool;
 }
 
-export async function withConnection<T>(fn: (conn: oracledb.Connection) => Promise<T>): Promise<T> {
+export async function withConnection<T>(fn: (conn: oracledb.Connection) => Promise<T>, opTimeoutMs = Number(process.env.DB_OP_TIMEOUT ?? 20000)): Promise<T> {
   if (!pool) await initPool();
   const conn = await pool!.getConnection();
+  let timer: NodeJS.Timeout | null = null;
+
   try {
-    return await fn(conn);
+    const op = fn(conn);
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        try {
+          if (typeof conn.break === 'function') conn.break();
+        } catch {}
+        reject(Object.assign(new Error(`DB operation timeout after ${opTimeoutMs}ms`), { code: 'DB_OP_TIMEOUT', statusCode: 504 }));
+      }, opTimeoutMs);
+    });
+    return await Promise.race([op, timeout]) as T;
   } finally {
-    await conn.close();
+    if (timer) clearTimeout(timer);
+    try { await conn.close(); } catch (e) { console.error('[DB] erro ao fechar conexão', e); }
   }
 }

@@ -1,16 +1,22 @@
 import oracledb from 'oracledb';
 import { withConnection } from '../db/pool.js';
+import { getCache, setCache } from '../utils/cache.js';
 
 export const listarSetores = async (_req: any, res: any) => {
+  const cacheKey = 'setores:v1';
+  const cached = getCache<any[]>(cacheKey);
+  if (cached) return res.json(cached);
+
   try {
     const setores = await withConnection(async (connection) => {
       const result = await connection.execute(
         `SELECT CODSETOR, DESCRICAO, SALDO FROM BRAMV_SETOR WHERE CODCLI = 27995 ORDER BY DESCRICAO`,
         [],
-        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 100 }
       );
       return result.rows || [];
     });
+    setCache(cacheKey, setores, 30_000); // 30s
     res.json(setores);
   } catch (err) {
     console.error('ERRO AO BUSCAR SETORES:', err);

@@ -1,115 +1,113 @@
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { useData } from '../context/DataContext';
-import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+import type { PedidoPendente } from '../types';
 
-type PedidoPendenteLocal = {
-  id: number | string;
-  data: string;
-  solicitante: string;
-  unidadeAdmin?: string;
-  qtdItens?: number;
-  valor?: number;
-  [key: string]: any;
-};
+function formatDate(d: any) {
+  const x = new Date(d);
+  return isNaN(x.getTime())
+    ? '-'
+    : x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function QuickApprovalTable() {
-  const { pedidosPendentes } = useData();
-  const { user } = useAuth();
+  const { pedidosPendentes: ctxPendentes } = useData();
 
-  const canSee = useMemo(() => {
-    if (!user) return false;
-    const perfil = (user as any).perfil;
-    const tipo = Number((user as any).tipoUsuario);
-    return perfil === 'Admin' || perfil === 'Aprovador' || tipo === 1 || tipo === 2;
-  }, [user]);
+  const [list, setList] = useState<PedidoPendente[]>(ctxPendentes || []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!canSee) return null;
+  // usa contexto no primeiro render e mantém estado local para refresh leve
+  useEffect(() => {
+    setList(ctxPendentes || []);
+  }, [ctxPendentes]);
 
-  const recentOrders: PedidoPendenteLocal[] = (pedidosPendentes || []).slice(0, 5);
-
-  const formatCurrency = (value?: number) => {
-    if (typeof value !== 'number' || isNaN(value)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-';
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return '-';
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-
-  if (!recentOrders.length) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <h3 className="mb-4 text-lg font-medium text-gray-900">Aprovação Rápida</h3>
-        <div className="py-8 text-center text-sm text-gray-500">
-          Não há pedidos pendentes para aprovação.
-        </div>
-      </div>
-    );
+  async function refresh() {
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await fetch('/api/pedidos/pendentes?days=45&maxrows=200', { headers: { 'Cache-Control': 'no-cache' } });
+      if (!resp.ok) throw new Error('Falha ao buscar pedidos pendentes');
+      const data = await resp.json();
+      const map = new Map<string | number, PedidoPendente>();
+      for (const p of Array.isArray(data) ? data : []) {
+        if (!map.has(p.id)) map.set(p.id, p);
+      }
+      const arr = Array.from(map.values()).sort((a, b) => {
+        const da = new Date(a.data as any).getTime() || 0;
+        const db = new Date(b.data as any).getTime() || 0;
+        return db - da;
+      });
+      setList(arr);
+    } catch (e: any) {
+      setError(e?.message || 'Erro ao atualizar.');
+    } finally {
+      setLoading(false);
+    }
   }
 
+  const top5 = useMemo(() => {
+    return (list || []).slice(0, 5);
+  }, [list]);
+
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      {/* Header opcional do card */}
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-medium text-gray-900">Aprovação Rápida</h3>
+    <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-900">Aprovação Rápida</h3>
+        <div className="flex items-center gap-2">
+          {error && <span className="text-xs text-red-600">{error}</span>}
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            title="Atualizar a lista"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+        </div>
       </div>
 
-      {/* Tabela alinhada ao PendingOrdersTable */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">N/S</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uni. Adm.</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QTD de Itens</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {recentOrders.map((pedido, index) => (
-              <tr key={pedido.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {String(index + 1).padStart(2, '0')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatDate(pedido.data)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  {pedido.id}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {pedido.solicitante}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  {pedido.unidadeAdmin || '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  {typeof pedido.qtdItens === 'number' ? pedido.qtdItens : '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                  {formatCurrency(pedido.valor)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <Link
-                    to={`/pedido/${pedido.id}`}
-                    className="inline-flex items-center px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Analisar
-                  </Link>
-                </td>
+      {top5.length === 0 ? (
+        <div className="text-sm text-gray-500">Não há pedidos pendentes para aprovar.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Data</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">ID</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Solicitante</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Uni. Adm.</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Valor</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Ação</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y">
+              {top5.map((p) => (
+                <tr key={`qa-${p.id}`} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 text-sm">{formatDate(p.data as any)}</td>
+                  <td className="px-4 py-2 text-sm text-gray-600">{p.id}</td>
+                  <td className="px-4 py-2 text-sm">{p.solicitante}</td>
+                  <td className="px-4 py-2 text-sm text-gray-600">{(p as any).unidadeAdmin || 'N/A'}</td>
+                  <td className="px-4 py-2 text-sm text-right font-medium">{brl.format(Number((p as any).valor || 0))}</td>
+                  <td className="px-4 py-2 text-sm">
+                    <Link
+                      to={`/pedido/${p.id}`}
+                      className="inline-flex items-center px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      Analisar
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
