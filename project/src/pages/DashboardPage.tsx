@@ -145,7 +145,7 @@ const DashboardPage = () => {
     ? 'igual à semana passada'
     : `${Math.abs(newOrdersDelta)} ${newOrdersDelta > 0 ? 'a mais' : 'a menos'} que a semana passada`;
 
-  const openContests = 2;
+  const openContests = 0;
   const contestsSubtitle = `${openContests} Contestes em Análise`;
 
   return (

@@ -35,9 +35,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return Array.from(map.values());
   }
 
-  // Janelas mais leves
-  const PENDENTES_QS = '?days=45&maxrows=200';
-  const HIST_QS      = '?days=45&maxrows=400';
+  // Janelas levinhas para hoje
+  const PENDENTES_QS = '?days=30&maxrows=200';
+  const HIST_QS      = '?days=30&maxrows=300';
   const FIN_QS       = '?days=14&maxOrders=300';
 
   const fetchPendingOrders = async () => {
@@ -64,9 +64,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const refreshFinancial = useCallback(async () => {
     try {
       await fetchFinancialData();
-    } catch (e) {
-      // mantém último valor ou null
-    }
+    } catch { /* mantém valor atual */ }
   }, []);
 
   const fetchSetores = async () => {
@@ -84,11 +82,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       await fetchSetores();
       await fetchPendingOrders();
 
-      // 2) Background controlado: usuários e histórico
-      fetchAllUsers?.().catch(() => {});
-      fetchOrdersHistory().catch(err => console.error('[Data] historico bg erro:', err));
+      // 2) Background: usuários e histórico (com pequeno atraso)
+      setTimeout(() => {
+        fetchAllUsers?.().catch(() => {});
+      }, 500);
+      setTimeout(() => {
+        fetchOrdersHistory().catch(err => console.error('[Data] historico bg erro:', err));
+      }, 800);
 
-      // 3) Financeiro com mais atraso e janela pequena
+      // 3) Financeiro por último e com mais atraso
       setTimeout(() => {
         fetchFinancialData().catch(err => console.error('[Data] financeiro bg erro:', err));
       }, 2000);

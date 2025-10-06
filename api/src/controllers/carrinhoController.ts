@@ -21,7 +21,8 @@ const findOrCreateCartHeader = async (connection: oracledb.Connection, codUsuari
     const newNumpedrca = (maxPedResult.rows[0] as any[])[0];
 
     await connection.execute(
-      `INSERT INTO BRAMV_PEDIDOC (NUMPEDRCA, CODUSUARIO, STATUS, DATA) VALUES (:numpedrca, :codUsuario, 0, SYSDATE)`,
+      `INSERT INTO BRAMV_PEDIDOC (NUMPEDRCA, CODUSUARIO, STATUS, DATA, QTD_ITENS, VALOR_TOTAL)
+       VALUES (:numpedrca, :codUsuario, 0, SYSDATE, 0, 0)`,
       { numpedrca: newNumpedrca, codUsuario: codUsuario },
     );
     return newNumpedrca;
@@ -62,21 +63,45 @@ export const adicionarItem = async (req: any, res: any) => {
   try {
     await withConnection(async (connection) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
+
+      // Já existe a linha?
       const existingItem = await connection.execute(
-        `SELECT QT FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :1 AND CODPROD = :2`,
-        [numpedrca, codprod]
+        `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :1 AND CODPROD = :2`,
+        [numpedrca, codprod],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
+
       if (existingItem.rows && existingItem.rows.length > 0) {
+        // Apenas aumenta a quantidade; QTD_ITENS (linhas) não muda
         await connection.execute(
           `UPDATE BRAMV_PEDIDOI SET QT = QT + :1 WHERE NUMPEDRCA = :2 AND CODPROD = :3`,
           [qt, numpedrca, codprod]
         );
+
+        const deltaValor = Number(qt) * Number(pvenda);
+        await connection.execute(
+          `UPDATE BRAMV_PEDIDOC
+             SET VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
+           WHERE NUMPEDRCA = :id`,
+          { delta: deltaValor, id: numpedrca }
+        );
       } else {
+        // Nova linha: incrementa QTD_ITENS em 1 e soma valor
         await connection.execute(
           `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA) VALUES (:1, :2, :3, :4)`,
           [numpedrca, codprod, qt, pvenda]
         );
+
+        const deltaValor = Number(qt) * Number(pvenda);
+        await connection.execute(
+          `UPDATE BRAMV_PEDIDOC
+             SET QTD_ITENS = NVL(QTD_ITENS,0) + 1,
+                 VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
+           WHERE NUMPEDRCA = :id`,
+          { delta: deltaValor, id: numpedrca }
+        );
       }
+
       await connection.commit();
     });
     res.status(200).json({ success: true });
@@ -92,10 +117,32 @@ export const atualizarItem = async (req: any, res: any) => {
   try {
     await withConnection(async (connection) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
+
+      // Buscar QT/PVENDA atuais para calcular delta
+      const cur = await connection.execute(
+        `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id AND CODPROD = :prod`,
+        { id: numpedrca, prod: Number(codprod) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const row: any = cur.rows?.[0];
+      if (!row) throw new Error('Item não encontrado no carrinho.');
+      const oldQt = Number(row.QT);
+      const pvenda = Number(row.PVENDA);
+
       await connection.execute(
         `UPDATE BRAMV_PEDIDOI SET QT = :qt WHERE NUMPEDRCA = :numpedrca AND CODPROD = :codprod`,
-        { qt, numpedrca, codprod }, { autoCommit: true }
+        { qt, numpedrca, codprod }, { autoCommit: false }
       );
+
+      const deltaValor = (Number(qt) - oldQt) * pvenda;
+      await connection.execute(
+        `UPDATE BRAMV_PEDIDOC
+           SET VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
+         WHERE NUMPEDRCA = :id`,
+        { delta: deltaValor, id: numpedrca }
+      );
+
+      await connection.commit();
     });
     res.status(200).json({ success: true });
   } catch (err) {
@@ -109,10 +156,36 @@ export const removerItem = async (req: any, res: any) => {
   try {
     await withConnection(async (connection) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
-      await connection.execute(
-        `DELETE FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :numpedrca AND CODPROD = :codprod`,
-        { numpedrca, codprod }, { autoCommit: true }
+
+      // Buscar QT/PVENDA antes de remover para ajustar o cabeçalho
+      const cur = await connection.execute(
+        `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id AND CODPROD = :prod`,
+        { id: numpedrca, prod: Number(codprod) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
+      const row: any = cur.rows?.[0];
+      if (!row) {
+        // nada a remover
+      } else {
+        const qt = Number(row.QT);
+        const pv = Number(row.PVENDA);
+        const deltaValor = qt * pv;
+
+        await connection.execute(
+          `DELETE FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :numpedrca AND CODPROD = :codprod`,
+          { numpedrca, codprod }, { autoCommit: false }
+        );
+
+        await connection.execute(
+          `UPDATE BRAMV_PEDIDOC
+             SET QTD_ITENS = GREATEST(0, NVL(QTD_ITENS,0) - 1),
+                 VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) - :delta)
+           WHERE NUMPEDRCA = :id`,
+          { delta: deltaValor, id: numpedrca }
+        );
+      }
+
+      await connection.commit();
     });
     res.status(200).json({ success: true });
   } catch (err) {

@@ -22,5 +22,14 @@ export function buildApp() {
 
   app.use(routes);
 
+  // Error handler global simples (responde rápido e não deixa request pendurado)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const msg = err?.message || 'Erro interno';
+    const code = err?.statusCode || 500;
+    console.error('[ERROR]', msg, err?.stack ? `\n${err.stack}` : '');
+    res.status(code).json({ error: msg });
+  });
+
   return app;
 }

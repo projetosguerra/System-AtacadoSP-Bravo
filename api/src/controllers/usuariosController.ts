@@ -3,22 +3,33 @@ import bcrypt from 'bcrypt';
 import { withConnection } from '../db/pool.js';
 import { getCache, setCache } from '../utils/cache.js';
 
-export const listarUsuarios = async (_req: any, res: any) => {
+export const listarUsuarios = async (req: any, res: any) => {
   const codcli = 27995;
-  const cacheKey = 'usuarios:list:v1';
+  const maxrows = Number(req.query?.maxrows ?? process.env.USERS_MAXROWS ?? 400);
+
+  const cacheKey = `usuarios:list:v2:max=${maxrows}`;
   const cached = getCache<any[]>(cacheKey);
   if (cached) return res.json(cached);
 
   try {
     const users = await withConnection(async (connection) => {
+      const sql = `
+        SELECT * FROM (
+          SELECT 
+            U.CODUSUARIO, U.PRIMEIRO_NOME, U.ULTIMO_NOME, U.EMAIL, U.CODSETOR, U.TIPOUSUARIO, U.GENERO, U.TELEFONE, U.ID_FUNCIONARIO,
+            S.DESCRICAO AS SETOR,
+            U.DTCADASTRO
+          FROM BRAMV_USUARIOS U 
+          LEFT JOIN BRAMV_SETOR S ON U.CODSETOR = S.CODSETOR AND S.CODCLI = U.CODCLI
+          WHERE U.CODCLI = :codcli
+          ORDER BY U.DTCADASTRO DESC NULLS LAST, U.CODUSUARIO DESC
+        )
+        WHERE ROWNUM <= :maxrows
+      `;
       const result = await connection.execute(
-        `SELECT 
-          U.CODUSUARIO, U.PRIMEIRO_NOME, U.ULTIMO_NOME, U.EMAIL, U.CODSETOR, U.TIPOUSUARIO, U.GENERO, U.TELEFONE, U.ID_FUNCIONARIO,
-          S.DESCRICAO AS SETOR
-         FROM BRAMV_USUARIOS U 
-         LEFT JOIN BRAMV_SETOR S ON U.CODSETOR = S.CODSETOR
-         WHERE U.CODCLI = :codcli`,
-        { codcli }, { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 100 }
+        sql,
+        { codcli, maxrows },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 200 }
       );
 
       return (result.rows || []).map((user: any) => ({
@@ -36,7 +47,7 @@ export const listarUsuarios = async (_req: any, res: any) => {
       }));
     });
 
-    setCache(cacheKey, users, 30_000); // 30s
+    setCache(cacheKey, users, 30_000);
     res.json(users);
   } catch (err) {
     console.error('ERRO AO BUSCAR USUÁRIOS:', err);

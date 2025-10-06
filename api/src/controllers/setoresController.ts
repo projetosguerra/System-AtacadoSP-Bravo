@@ -3,7 +3,7 @@ import { withConnection } from '../db/pool.js';
 import { getCache, setCache } from '../utils/cache.js';
 
 export const listarSetores = async (_req: any, res: any) => {
-  const cacheKey = 'setores:v1';
+  const cacheKey = 'setores:v2';
   const cached = getCache<any[]>(cacheKey);
   if (cached) return res.json(cached);
 
@@ -16,7 +16,7 @@ export const listarSetores = async (_req: any, res: any) => {
       );
       return result.rows || [];
     });
-    setCache(cacheKey, setores, 30_000); // 30s
+    setCache(cacheKey, setores, 30_000);
     res.json(setores);
   } catch (err) {
     console.error('ERRO AO BUSCAR SETORES:', err);
@@ -30,15 +30,16 @@ export const listarPedidosDoSetor = async (req: any, res: any) => {
     await withConnection(async (connection) => {
       const query = `
         SELECT
-          pc.NUMPEDRCA,
-          pc.DATA,
+          p.NUMPEDRCA      AS NUMPEDRCA,
+          p.DATA           AS DATA,
           u.PRIMEIRO_NOME || ' ' || u.ULTIMO_NOME AS SOLICITANTE,
-          (SELECT COUNT(*) FROM BRAMV_PEDIDOI pi_count WHERE pi_count.NUMPEDRCA = pc.NUMPEDRCA) AS QTD_ITENS,
-          (SELECT SUM(pi_sum.QT * pi_sum.PVENDA) FROM BRAMV_PEDIDOI pi_sum WHERE pi_sum.NUMPEDRCA = pc.NUMPEDRCA) AS VALOR_TOTAL
-        FROM BRAMV_PEDIDOC pc
-        JOIN BRAMV_USUARIOS u ON pc.CODUSUARIO = u.CODUSUARIO
-        WHERE u.CODSETOR = :codsetor AND pc.STATUS = 1
-        ORDER BY pc.DATA DESC
+          NVL(p.QTD_ITENS, 0)   AS QTD_ITENS,
+          NVL(p.VALOR_TOTAL, 0) AS VALOR_TOTAL
+        FROM BRAMV_PEDIDOC p
+        JOIN BRAMV_USUARIOS u ON p.CODUSUARIO = u.CODUSUARIO
+        WHERE u.CODSETOR = :codsetor
+          AND p.STATUS = 1
+        ORDER BY p.DATA DESC
       `;
       const result = await connection.execute(query, { codsetor: Number(codsetor) }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
       res.status(200).json(result.rows || []);

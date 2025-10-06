@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, XCircle, CheckCircle } from 'lucide-react';
 import { OrderDetail } from '../types';
@@ -13,89 +13,90 @@ const OrderDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const abortRef = useRef<AbortController | null>(null);
 
   const updateStatusAPI = useCallback(
     async (newStatus: number, conditionStatus?: number, motivo?: string) => {
-      try {
-        await fetch(`/api/pedido/${id}/status`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newStatus, conditionStatus, motivo }),
-        });
-      } catch (err) {
-        console.error(`Falha ao tentar mudar status para ${newStatus}:`, err);
-      }
+      // PUT simples; quem chama trata status
+      const resp = await fetch(`/api/pedido/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newStatus, conditionStatus, motivo }),
+      });
+      return resp;
     },
     [id]
   );
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
     const fetchOrder = async () => {
       if (!id) return;
       setIsLoading(true);
       setError(null);
       try {
+        // ao entrar, tenta marcar como Em Análise se ainda estiver Pendente
         await updateStatusAPI(3, 5);
 
-        const response = await fetch(`/api/pedido/${id}`);
-        if (!response.ok) throw new Error('Pedido não encontrado ou já está em análise por outro usuário.');
-        const data: OrderDetail = await response.json();
+        // aborta requisição antiga (navegação rápida)
+        try { abortRef.current?.abort(); } catch {}
+        abortRef.current = new AbortController();
+        const timeout = setTimeout(() => abortRef.current?.abort(), 12_000);
 
-        if (isMounted) {
-          setOrder(data);
-        }
+        const response = await fetch(`/api/pedido/${id}`, { signal: abortRef.current.signal });
+        clearTimeout(timeout);
+        if (!response.ok) throw new Error('Pedido não encontrado ou já está em análise por outro usuário.');
+
+        const data: OrderDetail = await response.json();
+        if (mounted) setOrder(data);
       } catch (err: any) {
-        if (isMounted) {
-          setError(err.message);
-          setTimeout(() => navigate('/painel-aprovacao'), 3000);
+        if (err?.name === 'AbortError') return;
+        if (mounted) {
+          setError(err.message || 'Falha ao carregar pedido.');
+          setTimeout(() => navigate('/painel-aprovacao'), 2500);
         }
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     fetchOrder();
 
     return () => {
-      isMounted = false;
+      mounted = false;
+      // Se ficou em análise, tenta devolver a pendente (best-effort)
       if (order?.status === 3) {
-        updateStatusAPI(5, 3);
+        updateStatusAPI(5, 3).catch(() => {});
       }
+      try { abortRef.current?.abort(); } catch {}
     };
-  }, [id, updateStatusAPI, navigate, order?.status]);
-
-  const [submitting, setSubmitting] = useState(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   async function handleApprove() {
     if (submitting || !order) return;
     setSubmitting(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/pedido/${order.id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          newStatus: 1,
-          conditionStatus: order.status
-        }),
-        cache: 'no-store'
-      });
-      await refetchAllData
+      const res = await updateStatusAPI(1, order.status);
       if (res.status === 409) {
-        refetchAllData();
-        setError('Conflito: o pedido já foi atualizado. Recarregando...');
+        // Conflito: recarrega o pedido atual e avisa
+        const r = await fetch(`/api/pedido/${order.id}`, { cache: 'no-store' });
+        if (r.ok) {
+          const fresh: OrderDetail = await r.json();
+          setOrder(fresh);
+        }
+        setError('Conflito: o pedido já foi atualizado por outro usuário. Atualizamos os dados.');
         return;
       }
       if (!res.ok) throw new Error('Erro ao aprovar');
-      refetchAllData();
+      await refetchAllData(); // corrigido: executar a função
       navigate('/painel-aprovacao');
     } catch (err: any) {
-      setError(
-        err && typeof err === 'object' && 'message' in err
-          ? (err as { message: string }).message
-          : String(err)
-      );
+      setError(err?.message || 'Erro ao aprovar.');
     } finally {
       setSubmitting(false);
     }
@@ -110,16 +111,12 @@ const OrderDetailPage = () => {
     setSubmitting(true);
     setError(null);
     try {
-      await updateStatusAPI(2, undefined, motivo);
-
+      const res = await updateStatusAPI(2, undefined, motivo);
+      if (!res.ok) throw new Error('Erro ao reprovar');
       await refetchAllData();
-
       navigate('/painel-aprovacao');
-
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.';
-      setError(`Falha ao tentar reprovar o pedido: ${errorMessage}`);
-      console.error(err);
+    } catch (err: any) {
+      setError(`Falha ao reprovar: ${err?.message || 'desconhecido'}`);
     } finally {
       setSubmitting(false);
       setIsRejectModalOpen(false);
@@ -134,7 +131,6 @@ const OrderDetailPage = () => {
 
   return (
     <div className="p-8 space-y-6">
-      {/* Cabeçalho */}
       <div>
         <Link to="/painel-aprovacao" className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
           <ArrowLeft size={16} /> Voltar ao Painel
@@ -142,7 +138,6 @@ const OrderDetailPage = () => {
         <h1 className="text-3xl font-bold text-gray-900 mt-1">Análise do Pedido #{order.id}</h1>
       </div>
 
-      {/* Detalhes do Pedido */}
       <div className="bg-white p-6 rounded-lg shadow-sm border grid grid-cols-4 gap-6">
         <div><h3 className="text-sm font-medium text-gray-500">Solicitante</h3><p className="mt-1 text-lg">{order.solicitante.nome}</p></div>
         <div><h3 className="text-sm font-medium text-gray-500">Unidade</h3><p className="mt-1 text-lg">{order.unidadeAdmin}</p></div>
@@ -150,7 +145,6 @@ const OrderDetailPage = () => {
         <div><h3 className="text-sm font-medium text-gray-500">Status</h3><span className="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">Aguardando Aprovação</span></div>
       </div>
 
-      {/* Tabela de Itens */}
       <div className="bg-white rounded-lg shadow-sm border">
         <table className="w-full">
           <thead className="bg-gray-50">
@@ -180,7 +174,6 @@ const OrderDetailPage = () => {
         </table>
       </div>
 
-      {/* Ações do Aprovador */}
       <div className="bg-white p-4 rounded-lg shadow-sm border flex justify-end gap-4">
         <button
           onClick={() => setIsRejectModalOpen(true)}

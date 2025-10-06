@@ -51,9 +51,9 @@ export async function initPool() {
     password,
     connectString,
     poolMin: Number(process.env.DB_POOL_MIN ?? 0),
-    poolMax: Number(process.env.DB_POOL_MAX ?? 20),     
+    poolMax: Number(process.env.DB_POOL_MAX ?? 30),
     poolIncrement: Number(process.env.DB_POOL_INC ?? 2),
-    queueTimeout: Number(process.env.DB_QUEUE_TIMEOUT ?? 10000), 
+    queueTimeout: Number(process.env.DB_QUEUE_TIMEOUT ?? 10000),
     stmtCacheSize: Number(process.env.DB_STMT_CACHE ?? 50),
   });
 
@@ -61,21 +61,47 @@ export async function initPool() {
   return pool;
 }
 
-export async function withConnection<T>(fn: (conn: oracledb.Connection) => Promise<T>, opTimeoutMs = Number(process.env.DB_OP_TIMEOUT ?? 20000)): Promise<T> {
+export async function withConnection<T>(
+  fn: (conn: oracledb.Connection) => Promise<T>,
+  opTimeoutMs = Number(process.env.DB_OP_TIMEOUT ?? 20000)
+): Promise<T> {
   if (!pool) await initPool();
   const conn = await pool!.getConnection();
   let timer: NodeJS.Timeout | null = null;
 
   try {
-    const op = fn(conn);
+    const op = (async () => {
+      try {
+        return await fn(conn);
+      } catch (e: any) {
+        // Quando damos conn.break() no timeout, operações subsequentes podem lançar DPI-1002.
+        if (e?.code === 'DPI-1002') {
+          const err = new Error('DB operation aborted (timeout)');
+          // @ts-ignore
+          err.statusCode = 504;
+          // @ts-ignore
+          err.code = 'DB_OP_TIMEOUT';
+          throw err;
+        }
+        throw e;
+      }
+    })();
+
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         try {
+          // Cancela a operação no Oracle e libera a conexão
+          // @ts-ignore
           if (typeof conn.break === 'function') conn.break();
         } catch {}
-        reject(Object.assign(new Error(`DB operation timeout after ${opTimeoutMs}ms`), { code: 'DB_OP_TIMEOUT', statusCode: 504 }));
+        const err = Object.assign(new Error(`DB operation timeout after ${opTimeoutMs}ms`), {
+          code: 'DB_OP_TIMEOUT',
+          statusCode: 504,
+        });
+        reject(err);
       }, opTimeoutMs);
     });
+
     return await Promise.race([op, timeout]) as T;
   } finally {
     if (timer) clearTimeout(timer);

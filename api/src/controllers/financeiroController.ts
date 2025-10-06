@@ -84,8 +84,9 @@ export const obterFinanceiro = async (req: any, res: any) => {
       }
     });
 
-    res.status(200).json({ gastosPorSetor: payload.gastosPorSetor });
+    return res.status(200).json({ gastosPorSetor: payload.gastosPorSetor });
   } catch (err: any) {
+    // Qualquer erro aqui: devolve zeros para não travar telas
     console.error('ERRO AO BUSCAR DADOS FINANCEIROS:', err);
     return res.status(200).json({ gastosPorSetor: [] });
   }
