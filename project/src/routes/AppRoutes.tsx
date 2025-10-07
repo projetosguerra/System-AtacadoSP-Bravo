@@ -9,7 +9,6 @@ import CartPage from '../pages/CartPage.tsx';
 import OrderDetailPage from '../pages/OrderDetailPage.tsx';
 import AllOrdersPage from '../pages/AllOrdersPage.tsx';
 
-// Estas são as suas rotas antigas, agora num ficheiro separado
 const AppRoutes = () => {
   return (
     <Layout>
@@ -22,7 +21,6 @@ const AppRoutes = () => {
         <Route path="/catalogo-produtos" element={<CatalogPage />} />
         <Route path="/carrinho" element={<CartPage />} />
         <Route path="/pedido/:id" element={<OrderDetailPage />} />
-        {/* Rota padrão para utilizadores autenticados */}
         <Route path="*" element={<DashboardPage />} />
       </Routes>
     </Layout>

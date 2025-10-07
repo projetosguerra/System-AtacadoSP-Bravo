@@ -10,7 +10,6 @@ const toNumber = (x: any) => Number.isFinite(Number(x)) ? Number(x) : 0;
 const ApprovalPanelPage = () => {
   const { pedidosPendentes: ctxPendentes, isLoading: ctxLoading } = useData();
 
-  // 30 dias mais leves por padrão (antes estava 60)
   const [days, setDays] = useState<number>(30);
   const [loading, setLoading] = useState<boolean>(false);
   const [list, setList] = useState<PedidoPendente[]>(ctxPendentes || []);
@@ -40,9 +39,8 @@ const ApprovalPanelPage = () => {
       }
       setList(Array.from(map.values()));
     } catch (e: any) {
-      if (e?.name === 'AbortError') return; // troca rápida de período: ignora
+      if (e?.name === 'AbortError') return; 
       setError(e?.message || 'Erro ao carregar pendentes.');
-      // fallback: usa o que veio do contexto
       setList(ctxPendentes || []);
     } finally {
       setLoading(false);
@@ -51,9 +49,7 @@ const ApprovalPanelPage = () => {
 
   useEffect(() => {
     setList(ctxPendentes || []);
-    // primeira carga: leve e sem totais
     loadPendentes(days, 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
 
   const totalPedidos = list.length;
@@ -100,7 +96,7 @@ const ApprovalPanelPage = () => {
           </div>
 
           <button
-            onClick={() => loadPendentes(days, 1)} // no clique, tenta calcular totais
+            onClick={() => loadPendentes(days, 1)} 
             disabled={isBusy}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
             title="Atualizar lista (tenta preencher totais)"

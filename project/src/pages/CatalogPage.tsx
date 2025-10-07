@@ -15,11 +15,9 @@ const CatalogPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      // cancela requisições antigas
       try { abortRef.current?.abort(); } catch {}
       abortRef.current = new AbortController();
 
-      // timeout defensivo de 12s no front
       const timeout = setTimeout(() => abortRef.current?.abort(), 12_000);
 
       const url = `/api/produtos?page=${page}&pageSize=${pageSize}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
@@ -30,9 +28,8 @@ const CatalogPage: React.FC = () => {
       const data: Product[] = await response.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      if (e?.name === 'AbortError') return; // navegação rápida: ignore
+      if (e?.name === 'AbortError') return;
       setError(e?.message || 'Falha ao carregar produtos.');
-      // mantém products atuais (se houver)
     } finally {
       setIsLoading(false);
     }
@@ -43,7 +40,6 @@ const CatalogPage: React.FC = () => {
     return () => {
       try { abortRef.current?.abort(); } catch {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (isLoading) return <div className="text-center p-12">Carregando produtos...</div>;

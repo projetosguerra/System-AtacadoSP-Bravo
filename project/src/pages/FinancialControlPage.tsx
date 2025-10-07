@@ -25,7 +25,6 @@ const FinancialControlPage: React.FC = () => {
     const { setores, financialData, isLoading, updateSetorLimit /*, refreshFinancialData? */ } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedSetor, setSelectedSetor] = useState<Setor | null>(null);
-    // Estados para a tabela
     const [limitHistory, setLimitHistory] = useState<LimitHistory[]>([]);
     const [sectorOrders, setSectorOrders] = useState<SectorOrder[]>([]);
     const [isHistoryLoading, setHistoryLoading] = useState<boolean>(false);

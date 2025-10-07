@@ -12,7 +12,6 @@ const ROLE_MAP: Record<string, NormalizedRole> = {
 export function normalizeRole(user: any): NormalizedRole {
   if (!user) return 'UNKNOWN';
 
-  // Possíveis campos que podem carregar a informação
   const candidates = [
     user.perfil,         // 'Admin', 'Aprovador', 'Solicitante'
     user.tipoUsuario     // 1, 2, 3 (numérico)

@@ -64,7 +64,6 @@ export const adicionarItem = async (req: any, res: any) => {
     await withConnection(async (connection) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
 
-      // Já existe a linha?
       const existingItem = await connection.execute(
         `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :1 AND CODPROD = :2`,
         [numpedrca, codprod],
@@ -72,7 +71,6 @@ export const adicionarItem = async (req: any, res: any) => {
       );
 
       if (existingItem.rows && existingItem.rows.length > 0) {
-        // Apenas aumenta a quantidade; QTD_ITENS (linhas) não muda
         await connection.execute(
           `UPDATE BRAMV_PEDIDOI SET QT = QT + :1 WHERE NUMPEDRCA = :2 AND CODPROD = :3`,
           [qt, numpedrca, codprod]
@@ -86,7 +84,6 @@ export const adicionarItem = async (req: any, res: any) => {
           { delta: deltaValor, id: numpedrca }
         );
       } else {
-        // Nova linha: incrementa QTD_ITENS em 1 e soma valor
         await connection.execute(
           `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA) VALUES (:1, :2, :3, :4)`,
           [numpedrca, codprod, qt, pvenda]
@@ -118,7 +115,6 @@ export const atualizarItem = async (req: any, res: any) => {
     await withConnection(async (connection) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
 
-      // Buscar QT/PVENDA atuais para calcular delta
       const cur = await connection.execute(
         `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id AND CODPROD = :prod`,
         { id: numpedrca, prod: Number(codprod) },
@@ -157,7 +153,6 @@ export const removerItem = async (req: any, res: any) => {
     await withConnection(async (connection) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
 
-      // Buscar QT/PVENDA antes de remover para ajustar o cabeçalho
       const cur = await connection.execute(
         `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id AND CODPROD = :prod`,
         { id: numpedrca, prod: Number(codprod) },
@@ -165,7 +160,6 @@ export const removerItem = async (req: any, res: any) => {
       );
       const row: any = cur.rows?.[0];
       if (!row) {
-        // nada a remover
       } else {
         const qt = Number(row.QT);
         const pv = Number(row.PVENDA);

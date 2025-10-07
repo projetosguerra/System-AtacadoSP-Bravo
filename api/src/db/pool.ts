@@ -74,7 +74,6 @@ export async function withConnection<T>(
       try {
         return await fn(conn);
       } catch (e: any) {
-        // Quando damos conn.break() no timeout, operações subsequentes podem lançar DPI-1002.
         if (e?.code === 'DPI-1002') {
           const err = new Error('DB operation aborted (timeout)');
           // @ts-ignore
@@ -90,8 +89,6 @@ export async function withConnection<T>(
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         try {
-          // Cancela a operação no Oracle e libera a conexão
-          // @ts-ignore
           if (typeof conn.break === 'function') conn.break();
         } catch {}
         const err = Object.assign(new Error(`DB operation timeout after ${opTimeoutMs}ms`), {

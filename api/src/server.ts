@@ -27,8 +27,6 @@ async function main() {
     console.log(`API Server rodando em http://localhost:${PORT}`);
   });
 
-  // timeouts para não deixar fetch “eterno”
-  // @ts-ignore Node types podem variar
   server.requestTimeout = Number(process.env.HTTP_REQUEST_TIMEOUT ?? 60_000);
   // @ts-ignore
   server.headersTimeout = Number(process.env.HTTP_HEADERS_TIMEOUT ?? 65_000);
