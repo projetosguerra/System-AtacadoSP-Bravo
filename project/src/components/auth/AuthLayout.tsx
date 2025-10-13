@@ -1,6 +1,6 @@
 import React from 'react';
-import Logo from '../../assets/Logomarca-AtacadoSP.png';
-import bannerImage from '../../assets/Banner 1.png';
+import Logo from '../../assets/Logo-Feat.png';
+import bannerImage from '../../assets/Banner 2.png';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -25,7 +25,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
             className="cursor-pointer"
             onClick={onLogoClick}
           >
-            <img src={Logo} alt="Atacado São Paulo" className="h-16 w-auto" />
+            <img src={Logo} alt="Ataercio Comercio Inteligente" className="h-16 w-auto" />
           </div>
 
           {alternativeAction && (
@@ -49,7 +49,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         <div className="w-full h-full flex items-center justify-center">
           <img
             src={bannerImage}
-            alt="Atacado São Paulo Banner"
+            alt="Ataercio Comercio Inteligente"
             className="w-full h-full object-cover"
           />
         </div>
