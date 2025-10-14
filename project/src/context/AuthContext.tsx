@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
+import { api } from '../lib/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -32,14 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, senha: password }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Falha no login');
-
+    const data = await api.post<{ token: string; user: any }>('/auth/login', { email, senha: password }, { timeoutMs: 12000 });
     localStorage.setItem('authToken', data.token);
     localStorage.setItem('userData', JSON.stringify(data.user));
     setToken(data.token);
@@ -47,13 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const register = async (primeiro_nome: string, ultimo_nome: string, email: string, password: string, genero: string, telefone: string) => {
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ primeiro_nome, ultimo_nome, email, senha: password, genero, telefone }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Falha no cadastro');
+    await api.post('/auth/register', { primeiro_nome, ultimo_nome, email, senha: password, genero, telefone }, { timeoutMs: 12000 });
   };
 
   const logout = () => {
@@ -66,9 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchAllUsers = useCallback(async () => {
     try {
-      const response = await fetch('/api/usuarios');
-      if (!response.ok) throw new Error('Falha ao buscar usuários');
-      const usersData: User[] = await response.json();
+      const usersData: User[] = await api.get('/usuarios');
       setAllUsers(usersData);
     } catch (error) {
       console.error(error);
@@ -77,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const switchUserForTesting = (codUsuario: number) => {
-    const newUser = allUsers.find(u => u.codUsuario === codUsuario);
+    const newUser = allUsers.find(u => (u as any).codUsuario === codUsuario);
     if (newUser) {
       setUser(newUser);
       localStorage.setItem('userData', JSON.stringify(newUser));
