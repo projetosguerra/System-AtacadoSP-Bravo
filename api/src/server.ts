@@ -8,7 +8,6 @@ const PORT = Number(process.env.PORT || 8888);
 
 console.log('--- [FASE 1 de 4] Início do arquivo server.ts ---');
 
-// Para forçar THICK (com Instant Client 19+), defina as variáveis de ambiente:
 // ORACLEDB_DRIVER_MODE=thick
 // ORACLE_CLIENT_LIB_DIR=C:\\instantclient_19_24
 const DRIVER_MODE = String(process.env.ORACLEDB_DRIVER_MODE || 'thin').toLowerCase();
