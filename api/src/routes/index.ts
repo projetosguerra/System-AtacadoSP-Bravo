@@ -15,8 +15,6 @@ const router = Router();
 
 router.use(health);
 
-router.use('/api/auth', auth);
-
 // Gates de pool por prefixo pesado (falha rápida quando saturar)
 const qTh = Number(process.env.DB_QUEUE_THRESHOLD ?? 15);
 router.use('/api/produtos', poolGate({ queueThreshold: qTh }));
@@ -24,6 +22,7 @@ router.use('/api/pedidos', poolGate({ queueThreshold: qTh }));
 router.use('/api/pedido', poolGate({ queueThreshold: qTh }));
 router.use('/api/financeiro', poolGate({ queueThreshold: qTh }));
 
+router.use(auth);
 router.use(produtos);
 router.use(pedido);
 router.use(pedidos);
