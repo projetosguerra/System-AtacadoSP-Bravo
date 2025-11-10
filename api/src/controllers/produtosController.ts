@@ -1,11 +1,26 @@
 import oracledb from 'oracledb';
 import { withConnection } from '../db/pool.js';
+import { getImagePrefix } from '../utils/imagePrefix.js';
 
 const produtosCache = new Map<string, { at: number; data: any[] }>();
 const PROD_TTL = 60_000;
 const inflight = new Map<string, Promise<any[]>>();
 
 const INFLIGHT_THRESHOLD = Number(process.env.PRODUTOS_INFLIGHT_THRESHOLD ?? 12);
+
+function toImageUrl(rawPath: string | null | undefined, codprod: number) {
+  const placeholder = `https://placehold.co/300x200/eeeeee/333333?text=Produto+${codprod}`;
+  if (!rawPath) return placeholder;
+
+  const filename = String(rawPath).replace(/\\/g, '/').split('/').pop();
+  if (!filename) return placeholder;
+
+  const httpPrefix = process.env.PROD_IMG_HTTP_PREFIX;
+  if (httpPrefix) {
+    return `${httpPrefix.replace(/\/+$/, '')}/${encodeURIComponent(filename)}`;
+  }
+  return `/api/media/produtos/${encodeURIComponent(filename)}`;
+}
 
 export const listarProdutos = async (req: any, res: any) => {
   try {
@@ -46,28 +61,43 @@ export const listarProdutos = async (req: any, res: any) => {
         `;
 
         if (term) {
-          where += ` AND LOWER(P.DESCRICAO) LIKE :pQ`;
+          where += ` AND LOWER(NVL(P.NOMEECOMMERCE, P.DESCRICAO)) LIKE :pQ`;
           binds.pQ = `%${term}%`;
         }
 
         const sql = `
           WITH ProductBase AS (
             SELECT
-              P.CODPROD, P.CODAUXILIAR, P.DESCRICAO, P.EMBALAGEM,
+              P.CODPROD,
+              P.CODAUXILIAR,
+              NVL(P.NOMEECOMMERCE, P.DESCRICAO) AS NOME,
+              /* Se for necessário mais tarde:
+                 dbms_lob.substr(P.DADOSTECNICOS, 4000, 1) AS DADOSTECNICOS,
+              */
+              P.EMBALAGEM,
+              P.DIRFOTOPROD          AS DIRFOTO,
               MIN(NVL(I.PTABELA, 0)) AS PRECO
             FROM PCPRODUT P
             JOIN PCCONTRATOI I ON I.CODPROD = P.CODPROD
             JOIN PCCONTRATO  C ON C.CODCONTRATO = I.CODCONTRATO
             JOIN PCCLIENT   CLI ON CLI.CODCLI = C.CODCLI
+            /* Joins extras do script do seu chefe (não usados agora, mas mantidos para compatibilidade):
+               JOIN PCMARCA        M   ON P.CODMARCA = M.CODMARCA
+               LEFT JOIN PCCATEGORIA    CAT ON P.CODCATEGORIA = CAT.CODCATEGORIA
+               LEFT JOIN PCSUBCATEGORIA SUB ON P.CODSUBCATEGORIA = SUB.CODSUBCATEGORIA
+            */
             WHERE ${where}
-            GROUP BY P.CODPROD, P.CODAUXILIAR, P.DESCRICAO, P.EMBALAGEM
+            GROUP BY
+              P.CODPROD, P.CODAUXILIAR, P.NOMEECOMMERCE, P.DESCRICAO,
+              P.EMBALAGEM, P.DIRFOTOPROD
           ),
           Paged AS (
-            SELECT CODPROD, CODAUXILIAR, DESCRICAO, PRECO, EMBALAGEM,
-                   ROW_NUMBER() OVER (ORDER BY DESCRICAO) AS RN
+            SELECT
+              CODPROD, CODAUXILIAR, NOME, PRECO, EMBALAGEM, DIRFOTO,
+              ROW_NUMBER() OVER (ORDER BY NOME) AS RN
             FROM ProductBase
           )
-          SELECT CODPROD, CODAUXILIAR, DESCRICAO, PRECO, EMBALAGEM
+          SELECT CODPROD, CODAUXILIAR, NOME, PRECO, EMBALAGEM, DIRFOTO
           FROM Paged
           WHERE RN BETWEEN :pStart AND :pEnd
         `;
@@ -80,11 +110,11 @@ export const listarProdutos = async (req: any, res: any) => {
         return (result.rows || []).map((row: any) => ({
           id: row.CODPROD,
           codigoAuxiliar: row.CODAUXILIAR,
-          nome: row.DESCRICAO,
+          nome: row.NOME,
           preco: row.PRECO,
           unit: row.EMBALAGEM,
-          descricao: `Descrição para ${row.DESCRICAO}`,
-          imgUrl: `https://placehold.co/300x200/eeeeee/333333?text=Produto+${row.CODPROD}`,
+          descricao: `Descrição para ${row.NOME}`,
+          imgUrl: toImageUrl(row.DIRFOTO, row.CODPROD),
         }));
       });
 

@@ -1,6 +1,6 @@
 import React from 'react';
-import Logo from '../../assets/Logo-Feat.png';
-import bannerImage from '../../assets/Banner 2.png';
+import Logo from '../../assets/Logomarca-AtacadoSP.png';
+import bannerImage from '../../assets/Banner 1.png';
 
 interface AuthLayoutProps {
   children: React.ReactNode;

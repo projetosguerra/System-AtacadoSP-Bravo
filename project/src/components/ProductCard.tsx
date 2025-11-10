@@ -26,13 +26,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
 
     return (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden group">
-            <div className="aspect-[4/3] overflow-hidden relative">
+            <div className="relative h-44 md:h-52 lg:h-60 bg-white rounded-t-xl overflow-hidden flex items-center justify-center">
                 <img
                     src={product.imgUrl}
                     alt={product.nome}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    decoding="async"
+                    className="max-h-full max-w-full object-contain p-3"
+                    onError={(e) => {
+                        const el = e.currentTarget as HTMLImageElement;
+                        el.onerror = null; // evita loop
+                        el.src = `https://placehold.co/600x400/ffffff/cccccc?text=${encodeURIComponent(
+                            product.nome?.slice(0, 32) || `Produto ${product.id}`
+                        )}`;
+                    }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </div>
 
             <div className="p-5 flex flex-col flex-grow">

@@ -59,40 +59,47 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault(); 
-  setIsLoading(true);
-  setError(null);
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
-  try {
-    const response = await fetch('/api/usuarios', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        primeiroNome,
-        ultimoNome,
-        email,
-        senha,
-        tipoUsuario: tipousuario,
-        codSetor: codsetor || null,
-        genero,
-        telefone,
-        idFuncionario
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'Falha ao criar usuário');
+    if (!codsetor) {
+      setIsLoading(false);
+      setError('Selecione um setor.');
+      return;
     }
 
-    onUserAdded(); 
-    onClose();
-  } catch (err: any) {
-    setError(err.message);
-  } finally {
-    setIsLoading(false);
-  }
-};
+    try {
+      const response = await fetch('/api/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          primeiroNome,
+          ultimoNome,
+          email,
+          senha,
+          tipoUsuario: tipousuario,
+          codSetor: codsetor, // agora obrigatório para 1,2,3
+          genero,
+          telefone,
+          idFuncionario
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao criar usuário');
+      }
+
+      onUserAdded();
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -150,7 +157,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                       value={ultimoNome}
                       onChange={(e) => setUltimoNome(e.target.value)}
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duração-200 bg-white"
                       placeholder="Digite o último nome"
                     />
                   </div>
@@ -185,7 +192,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                 </div>
               </div>
 
-              {/* Seção de Informações de Contato */}
+              {/* Contato e Sistema */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                   <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
@@ -193,7 +200,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  Informações de Contato
+                  Contato e Acesso
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -221,30 +228,16 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                       placeholder="usuario@empresa.com"
                     />
                   </div>
-                </div>
-              </div>
-
-              {/* Acesso ao Sistema */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                    <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                  </div>
-                  Acesso ao Sistema
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="relative">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700" htmlFor="senha">
-                      Senha
+                      Senha <span className="text-red-500">*</span>
                     </label>
                     <input
                       id="senha"
                       type="password"
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
-                      placeholder="Crie uma senha para o novo usuário"
+                      placeholder="Crie uma senha"
                       required
                       className="w-full px-4 py-3 mt-1 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                     />
@@ -264,27 +257,25 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                     </select>
                   </div>
 
-                  {/* Campo de Setor - Apenas para Solicitante */}
-                  {tipousuario === 3 && (
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Setor (Secretaria) <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={codsetor}
-                        onChange={(e) => setCodsetor(Number(e.target.value))}
-                        required={tipousuario === 3}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white"
-                      >
-                        <option value="" disabled>Selecione um setor</option>
-                        {setores.map(setor => (
-                          <option key={setor.CODSETOR} value={setor.CODSETOR}>
-                            {setor.DESCRICAO}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  {/* Setor — AGORA EXIBIDO PARA TODOS (1, 2, 3) */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Setor (Secretaria) <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={codsetor}
+                      onChange={(e) => setCodsetor(Number(e.target.value))}
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white"
+                    >
+                      <option value="" disabled>Selecione um setor</option>
+                      {setores.map(setor => (
+                        <option key={setor.CODSETOR} value={setor.CODSETOR}>
+                          {setor.DESCRICAO}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -309,7 +300,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium transition-all duration-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium transition-all duração-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
             >
               Cancelar
             </button>
@@ -317,7 +308,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
               type="submit"
               disabled={isLoading}
               onClick={handleSubmit}
-              className="px-6 py-3 bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white rounded-lg font-medium transition-all duration-200 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center space-x-2"
+              className="px-6 py-3 bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white rounded-lg font-medium transition-all duração-200 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center space-x-2"
             >
               {isLoading ? (
                 <>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, Users, DollarSign, CheckSquare, ShoppingCart, FileText, LogOut } from 'lucide-react';
-import logo from '../assets/Logo-Feat.png';
+import logo from '../assets/Logomarca-AtacadoSP.png';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmationModal } from './ConfirmationModal';
 
@@ -57,8 +57,10 @@ const Sidebar = () => {
   return (
     <>
     <aside className="w-64 bg-white shadow-md flex flex-col flex-shrink-0">
-      <div className="p-6 flex items-center justify-center border-b">
-        <img src={logo} alt="Logo Atacado São Paulo" className="h-24 w-24" />
+      <div className="p-6 border-b border-gray-200">
+        <div className='flex justify-center'>
+          <img src={logo} alt="Logo Atacado São Paulo" />
+        </div>
       </div>
       <nav className="flex-1 p-2 space-y-2">
         {menuItems.map((item, index) => (

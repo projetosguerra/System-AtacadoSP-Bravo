@@ -40,6 +40,11 @@ export function getPool(): oracledb.Pool {
 
 type WithConnMeta = { acquireMs: number };
 
+function sanitizeSchemaName(v?: string | null) {
+  const s = (v || '').trim();
+  return s && /^[A-Z0-9_#$]{1,30}$/i.test(s) ? s : '';
+}
+
 export async function withConnection<T>(
   fn: (conn: oracledb.Connection, meta?: WithConnMeta) => Promise<T>
 ): Promise<T> {
@@ -56,18 +61,19 @@ export async function withConnection<T>(
     } catch (e: any) {
       if (!warnedCallTimeout) {
         warnedCallTimeout = true;
-        console.warn(`[DB] callTimeout não suportado com o Oracle Client atual. Considere usar modo THIN (ORACLEDB_DRIVER_MODE=thin) ou atualizar o Instant Client para 19c+. Detalhes: ${e?.message || e}`);
+        console.warn(`[DB] callTimeout não suportado no client atual: ${e?.message || e}`);
       }
+    }
+
+    const schema = sanitizeSchemaName(process.env.DB_SCHEMA);
+    if (schema) {
+      await conn.execute(`ALTER SESSION SET CURRENT_SCHEMA = ${schema}`);
     }
 
     return await fn(conn, { acquireMs });
   } finally {
     if (conn) {
-      try {
-        await conn.close();
-      } catch (e) {
-        console.error('[DB] Erro ao fechar conexão:', e);
-      }
+      try { await conn.close(); } catch (e) { console.error('[DB] Erro ao fechar conexão:', e); }
     }
   }
 }

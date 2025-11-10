@@ -63,7 +63,7 @@ export const Login: React.FC<LoginProps> = ({
     <AuthLayout
       alternativeAction={{
         text: 'Não tem uma conta?',
-        buttonText: 'Sign Up',
+        buttonText: 'Cadastrar-se',
         onClick: onNavigateToSignUp,
       }}
       onLogoClick={handleLogoClick}
