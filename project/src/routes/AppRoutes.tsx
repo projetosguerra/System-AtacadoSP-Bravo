@@ -8,6 +8,7 @@ import CatalogPage from '../pages/CatalogPage.tsx';
 import CartPage from '../pages/CartPage.tsx';
 import OrderDetailPage from '../pages/OrderDetailPage.tsx';
 import AllOrdersPage from '../pages/AllOrdersPage.tsx';
+import ProductDetailsPage from '../pages/ProductDetailsPage.tsx';
 
 const AppRoutes = () => {
   return (
@@ -22,6 +23,7 @@ const AppRoutes = () => {
         <Route path="/carrinho" element={<CartPage />} />
         <Route path="/pedido/:id" element={<OrderDetailPage />} />
         <Route path="*" element={<DashboardPage />} />
+        <Route path="/produtos/:id" element={<ProductDetailsPage />}></Route>
       </Routes>
     </Layout>
   );

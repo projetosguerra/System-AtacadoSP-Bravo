@@ -26,26 +26,30 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
 
     return (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden group">
-            <div className="relative h-44 md:h-52 lg:h-60 bg-white rounded-t-xl overflow-hidden flex items-center justify-center">
-                <img
-                    src={product.imgUrl}
-                    alt={product.nome}
-                    loading="lazy"
-                    decoding="async"
-                    className="max-h-full max-w-full object-contain p-3"
-                    onError={(e) => {
-                        const el = e.currentTarget as HTMLImageElement;
-                        el.onerror = null; // evita loop
-                        el.src = `https://placehold.co/600x400/ffffff/cccccc?text=${encodeURIComponent(
-                            product.nome?.slice(0, 32) || `Produto ${product.id}`
-                        )}`;
-                    }}
-                />
-            </div>
+            <Link to={`/produtos/${product.id}`} className="block">
+                <div className="relative h-44 md:h-52 lg:h-60 bg-white rounded-t-xl overflow-hidden flex items-center justify-center">
+                    <img
+                        src={product.imgUrl}
+                        alt={product.nome}
+                        loading="lazy"
+                        decoding="async"
+                        className="max-h-full max-w-full object-contain p-3"
+                        onError={(e) => {
+                            const el = e.currentTarget as HTMLImageElement;
+                            el.onerror = null; // evita loop
+                            el.src = `https://placehold.co/600x400/ffffff/cccccc?text=${encodeURIComponent(
+                                product.nome?.slice(0, 32) || `Produto ${product.id}`
+                            )}`;
+                        }}
+                    />
+                </div>
+            </Link>
 
             <div className="p-5 flex flex-col flex-grow">
                 <div className="flex-grow">
-                    <h3 className="font-semibold text-gray-900 text-base mb-2 line-clamp-2 leading-tight">{product.nome}</h3>
+                    <Link to={`/produtos/${product.id}`} className="hover:underline">
+                        <h3 className="text-base font-semibold text-gray-900 line-clamp-2">{product.nome}</h3>
+                    </Link>
                     <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">{product.descricao}</p>
                 </div>
 

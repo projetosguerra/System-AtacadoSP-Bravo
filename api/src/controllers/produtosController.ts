@@ -139,3 +139,132 @@ export const listarProdutos = async (req: any, res: any) => {
     return res.json(anyCached);
   }
 };
+
+export async function getProdutoDetalhe(req: any, res: any) {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'ID inválido' });
+
+  const codCli = Number(process.env.CODCLI ?? 27995);
+
+  try {
+    const data = await withConnection(async (conn) => {
+      const binds = { pId: id, pCodCli: codCli };
+
+      const sql = `
+        SELECT
+          P.CODPROD,
+          P.CODAUXILIAR,
+          NVL(P.NOMEECOMMERCE, P.DESCRICAO) AS NOME,
+          dbms_lob.substr(P.DADOSTECNICOS, 4000, 1) AS DADOSTECNICOS,
+          P.EMBALAGEM,
+          P.DIRFOTOPROD AS DIRFOTO,
+          (
+            SELECT MIN(NVL(I.PTABELA, 0))
+            FROM PCCONTRATOI I
+            JOIN PCCONTRATO  C   ON C.CODCONTRATO = I.CODCONTRATO
+            JOIN PCCLIENT    CLI ON CLI.CODCLI     = C.CODCLI
+            WHERE CLI.CODCLI = :pCodCli
+              AND I.CODPROD  = P.CODPROD
+              AND TRUNC(C.DTVENCIMENTO) >= TRUNC(SYSDATE)
+          ) AS PRECO
+        FROM PCPRODUT P
+        WHERE P.CODPROD = :pId
+          AND EXISTS (
+            SELECT 1
+            FROM PCCONTRATOI I2
+            JOIN PCCONTRATO  C2   ON C2.CODCONTRATO = I2.CODCONTRATO
+            JOIN PCCLIENT    CLI2 ON CLI2.CODCLI     = C2.CODCLI
+            WHERE CLI2.CODCLI = :pCodCli
+              AND I2.CODPROD  = P.CODPROD
+              AND TRUNC(C2.DTVENCIMENTO) >= TRUNC(SYSDATE)
+          )
+      `;
+
+      const result = await conn.execute(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+      const r = (result.rows || [])[0] as any;
+      if (!r) return null;
+
+      return {
+        id: r.CODPROD,
+        codigoAuxiliar: r.CODAUXILIAR,
+        nome: r.NOME,
+        descricaoTecnica: r.DADOSTECNICOS || '',
+        preco: Number(r.PRECO || 0),
+        embalagem: r.EMBALAGEM || '',
+        imgUrl: toImageUrl(r.DIRFOTO, r.CODPROD),
+      };
+    });
+
+    if (!data) return res.status(404).json({ error: 'Produto não encontrado ou sem contrato vigente.' });
+    return res.json(data);
+  } catch (e: any) {
+    console.error('[getProdutoDetalhe] erro:', e);
+    return res.status(500).json({ error: 'Erro interno ao buscar detalhes do produto.' });
+  }
+};
+
+export async function getProdutosProximos(req: any, res: any) {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'ID inválido' });
+
+  const codCli = Number(process.env.CODCLI ?? 27995);
+
+  try {
+    const data = await withConnection(async (conn) => {
+      const sql = `
+        WITH ProductBase AS (
+          SELECT
+            P.CODPROD,
+            P.CODAUXILIAR,
+            NVL(P.NOMEECOMMERCE, P.DESCRICAO) AS NOME,
+            P.EMBALAGEM,
+            P.DIRFOTOPROD          AS DIRFOTO,
+            MIN(NVL(I.PTABELA, 0)) AS PRECO
+          FROM PCPRODUT P
+          JOIN PCCONTRATOI I ON I.CODPROD = P.CODPROD
+          JOIN PCCONTRATO  C ON C.CODCONTRATO = I.CODCONTRATO
+          JOIN PCCLIENT   CLI ON CLI.CODCLI   = C.CODCLI
+          WHERE CLI.CODCLI = :pCodCli
+            AND TRUNC(C.DTVENCIMENTO) >= TRUNC(SYSDATE)
+          GROUP BY P.CODPROD, P.CODAUXILIAR, P.NOMEECOMMERCE, P.DESCRICAO,
+                   P.EMBALAGEM, P.DIRFOTOPROD
+        ),
+        Paged AS (
+          SELECT
+            CODPROD, CODAUXILIAR, NOME, PRECO, EMBALAGEM, DIRFOTO,
+            ROW_NUMBER() OVER (ORDER BY NOME) AS RN,
+            COUNT(*)     OVER ()               AS TOTAL
+          FROM ProductBase
+        ),
+        Curr AS (
+          SELECT RN, TOTAL FROM Paged WHERE CODPROD = :pId
+        )
+        SELECT p.*
+        FROM Paged p
+        CROSS JOIN Curr c
+        WHERE p.RN IN (
+          MOD(c.RN    , c.TOTAL) + 1,  -- próximo
+          MOD(c.RN + 1, c.TOTAL) + 1   -- próximo do próximo
+        )
+        ORDER BY p.RN
+      `;
+
+      const binds = { pId: id, pCodCli: codCli };
+      const r = await conn.execute(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+
+      return (r.rows || []).map((row: any) => ({
+        id: row.CODPROD,
+        codigoAuxiliar: row.CODAUXILIAR,
+        nome: row.NOME,
+        preco: Number(row.PRECO || 0),
+        unit: row.EMBALAGEM || '',
+        imgUrl: toImageUrl(row.DIRFOTO, row.CODPROD),
+      }));
+    });
+
+    return res.json(Array.isArray(data) ? data : []);
+  } catch (e: any) {
+    console.error('[getProdutosProximos] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar próximos produtos.' });
+  }
+}
