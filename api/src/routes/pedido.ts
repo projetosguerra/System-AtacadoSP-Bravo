@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { obterPedido, atualizarStatusPedido } from '../controllers/pedidoController.js';
+import { obterPedido, atualizarStatusPedido, aprovarPedido } from '../controllers/pedidoController.js';
 import { updateStatusSchema } from '../validators/pedido.js';
 
 const router = Router();
@@ -11,5 +11,7 @@ router.put('/api/pedido/:id/status', (req, res, next) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   return atualizarStatusPedido(req, res).catch(next);
 });
+
+router.post('/api/pedido/:id/aprovar', (req, res, next) => aprovarPedido(req, res).catch(next));
 
 export default router;

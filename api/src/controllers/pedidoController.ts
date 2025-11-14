@@ -86,3 +86,88 @@ export const atualizarStatusPedido = async (req: any, res: any) => {
     res.status(500).json({ error: err.message || 'Erro ao atualizar o status do pedido.' });
   }
 };
+
+export const aprovarPedido = async (req: any, res: any) => {
+  const { id } = req.params;
+  const codCli = Number(process.env.CODCLI ?? 27995);
+  const codFilial = String(req.body?.codFilial ?? process.env.CODFILIAL ?? '01');
+  const vlFrete = Number(req.body?.frete ?? 0);
+
+  try {
+    const result = await withConnection(async (connection) => {
+      const hdr = await connection.execute(
+        `SELECT STATUS FROM BRAMV_PEDIDOC WHERE NUMPEDRCA = :id`,
+        { id: Number(id) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const row: any = hdr.rows?.[0];
+      if (!row) throw new Error('Pedido não encontrado.');
+      const statusAtual = Number(row.STATUS);
+
+      if (statusAtual === 1) {
+        const logs = await connection.execute(
+          `SELECT * FROM LOG_PROCESSA_PEDIDO WHERE NUMPEDRCA = :id ORDER BY IDLOG DESC`,
+          { id: Number(id) },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        return { alreadyApproved: true, logs: logs.rows ?? [] };
+      }
+      if (statusAtual !== 5) {
+        throw new Error(`Pedido não está pendente para aprovação (status atual=${statusAtual}).`);
+      }
+
+      await connection.execute(
+        `BEGIN
+           P_PROCESSA_PEDIDO_LOG(:P_CODCLI, :P_CODFILIAL, :P_NUMPEDRCA, NVL(:P_VLFRETE,0));
+         END;`,
+        {
+          P_CODCLI: codCli,
+          P_CODFILIAL: codFilial,
+          P_NUMPEDRCA: Number(id),
+          P_VLFRETE: vlFrete
+        },
+        { autoCommit: false }
+      );
+
+      const logRes = await connection.execute(
+        `SELECT * FROM LOG_PROCESSA_PEDIDO WHERE NUMPEDRCA = :id ORDER BY IDLOG DESC`,
+        { id: Number(id) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+
+      await connection.execute(
+        `UPDATE BRAMV_PEDIDOC SET STATUS = 1 WHERE NUMPEDRCA = :id`,
+        { id: Number(id) }
+      );
+
+      await connection.commit();
+      return { alreadyApproved: false, logs: logRes.rows ?? [] };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: result.alreadyApproved
+        ? `Pedido #${id} já estava aprovado.`
+        : `Pedido #${id} aprovado e processado no WinThor.`,
+      logs: result.logs
+    });
+  } catch (err: any) {
+    let logs: any[] = [];
+    try {
+      logs = await withConnection(async (connection) => {
+        const r = await connection.execute(
+          `SELECT * FROM LOG_PROCESSA_PEDIDO WHERE NUMPEDRCA = :id ORDER BY IDLOG DESC`,
+          { id: Number(id) },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        return r.rows ?? [];
+      });
+    } catch { /* ignore */ }
+
+    console.error('[aprovarPedido] erro:', err);
+    return res.status(500).json({
+      error: err?.message || 'Falha ao aprovar/processar o pedido.',
+      logs
+    });
+  }
+};

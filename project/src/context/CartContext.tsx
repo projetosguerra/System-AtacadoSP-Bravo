@@ -72,8 +72,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const limitsLoaded = !!(user?.codSetor && Array.isArray(setores) && setores.length && financialData);
     if (limitsLoaded && newTotalValue > sectorAvailableBalance) {
       console.warn('[BUDGET] Projeção acima do saldo. totalProj:', newTotalValue, 'saldoDisp:', sectorAvailableBalance);
-      // Opcional: só avisar, não bloquear. Se quiser bloquear, mantenha o return:
-      // return;
     }
 
     const originalCart = [...cartItems];

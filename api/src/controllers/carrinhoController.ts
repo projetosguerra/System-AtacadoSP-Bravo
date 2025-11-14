@@ -1,32 +1,31 @@
 import oracledb from 'oracledb';
 import { withConnection } from '../db/pool.js';
+import { resolveCodUsurForClient, reserveNextWinthorOrderNumber } from '../utils/winthorOrder.js';
 
 const findOrCreateCartHeader = async (connection: oracledb.Connection, codUsuario: number): Promise<number> => {
   const result = await connection.execute<{ NUMPEDRCA: number }>(
-    `SELECT NUMPEDRCA FROM BRAMV_PEDIDOC WHERE CODUSUARIO = :codUsuario AND STATUS = 0`,
+    `SELECT NUMPEDRCA
+       FROM BRAMV_PEDIDOC
+      WHERE CODUSUARIO = :codUsuario
+        AND STATUS = 0`,
     [codUsuario],
     { outFormat: oracledb.OUT_FORMAT_OBJECT }
   );
 
   if (result.rows && result.rows.length > 0 && result.rows[0]) {
     return result.rows[0].NUMPEDRCA;
-  } else {
-    const maxPedResult = await connection.execute(
-      `SELECT NVL(MAX(NUMPEDRCA), 0) + 1 AS NEXT_ID FROM BRAMV_PEDIDOC`
-    );
-
-    if (!maxPedResult.rows || maxPedResult.rows.length === 0) {
-      throw new Error('Não foi possível gerar um novo número de pedido.');
-    }
-    const newNumpedrca = (maxPedResult.rows[0] as any[])[0];
-
-    await connection.execute(
-      `INSERT INTO BRAMV_PEDIDOC (NUMPEDRCA, CODUSUARIO, STATUS, DATA, QTD_ITENS, VALOR_TOTAL)
-       VALUES (:numpedrca, :codUsuario, 0, SYSDATE, 0, 0)`,
-      { numpedrca: newNumpedrca, codUsuario: codUsuario },
-    );
-    return newNumpedrca;
   }
+
+  const codUsur = await resolveCodUsurForClient(connection);
+  const numpedWinthor = await reserveNextWinthorOrderNumber(connection, codUsur);
+
+  await connection.execute(
+    `INSERT INTO BRAMV_PEDIDOC (NUMPEDRCA, CODUSUARIO, STATUS, DATA, QTD_ITENS, VALOR_TOTAL)
+     VALUES (:numpedrca, :codUsuario, 0, SYSDATE, 0, 0)`,
+    { numpedrca: numpedWinthor, codUsuario }
+  );
+
+  return numpedWinthor;
 };
 
 export const listarCarrinho = async (req: any, res: any) => {
@@ -35,10 +34,11 @@ export const listarCarrinho = async (req: any, res: any) => {
     const items = await withConnection(async (connection) => {
       const result = await connection.execute(
         `SELECT i.CODPROD, i.QT, i.PVENDA, p.DESCRICAO, p.UNIDADE
-         FROM BRAMV_PEDIDOI i
-         JOIN BRAMV_PEDIDOC c ON i.NUMPEDRCA = c.NUMPEDRCA
-         JOIN PCPRODUT p ON i.CODPROD = p.CODPROD
-         WHERE c.CODUSUARIO = :codusuario AND c.STATUS = 0`,
+           FROM BRAMV_PEDIDOI i
+           JOIN BRAMV_PEDIDOC c ON i.NUMPEDRCA = c.NUMPEDRCA
+           JOIN PCPRODUT p      ON i.CODPROD   = p.CODPROD
+          WHERE c.CODUSUARIO = :codusuario
+            AND c.STATUS = 0`,
         [codusuario], { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
       return (result.rows || []).map((item: any) => ({
@@ -52,7 +52,7 @@ export const listarCarrinho = async (req: any, res: any) => {
     });
     res.json(items);
   } catch (err) {
-    console.error("Erro ao buscar carrinho:", err);
+    console.error('Erro ao buscar carrinho:', err);
     res.status(500).json({ error: 'Erro ao buscar carrinho.' });
   }
 };
@@ -65,36 +65,43 @@ export const adicionarItem = async (req: any, res: any) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
 
       const existingItem = await connection.execute(
-        `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :1 AND CODPROD = :2`,
+        `SELECT QT, PVENDA
+           FROM BRAMV_PEDIDOI
+          WHERE NUMPEDRCA = :1
+            AND CODPROD   = :2`,
         [numpedrca, codprod],
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
 
       if (existingItem.rows && existingItem.rows.length > 0) {
         await connection.execute(
-          `UPDATE BRAMV_PEDIDOI SET QT = QT + :1 WHERE NUMPEDRCA = :2 AND CODPROD = :3`,
+          `UPDATE BRAMV_PEDIDOI
+              SET QT = QT + :1
+            WHERE NUMPEDRCA = :2
+              AND CODPROD   = :3`,
           [qt, numpedrca, codprod]
         );
 
         const deltaValor = Number(qt) * Number(pvenda);
         await connection.execute(
           `UPDATE BRAMV_PEDIDOC
-             SET VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
-           WHERE NUMPEDRCA = :id`,
+              SET VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
+            WHERE NUMPEDRCA = :id`,
           { delta: deltaValor, id: numpedrca }
         );
       } else {
         await connection.execute(
-          `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA) VALUES (:1, :2, :3, :4)`,
+          `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA)
+           VALUES (:1, :2, :3, :4)`,
           [numpedrca, codprod, qt, pvenda]
         );
 
         const deltaValor = Number(qt) * Number(pvenda);
         await connection.execute(
           `UPDATE BRAMV_PEDIDOC
-             SET QTD_ITENS = NVL(QTD_ITENS,0) + 1,
-                 VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
-           WHERE NUMPEDRCA = :id`,
+              SET QTD_ITENS  = NVL(QTD_ITENS,0) + 1,
+                  VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
+            WHERE NUMPEDRCA = :id`,
           { delta: deltaValor, id: numpedrca }
         );
       }
@@ -103,7 +110,7 @@ export const adicionarItem = async (req: any, res: any) => {
     });
     res.status(200).json({ success: true });
   } catch (err) {
-    console.error("Erro ao adicionar item:", err);
+    console.error('Erro ao adicionar item:', err);
     res.status(500).json({ error: 'Erro ao adicionar item ao carrinho.' });
   }
 };
@@ -116,25 +123,32 @@ export const atualizarItem = async (req: any, res: any) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
 
       const cur = await connection.execute(
-        `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id AND CODPROD = :prod`,
+        `SELECT QT, PVENDA
+           FROM BRAMV_PEDIDOI
+          WHERE NUMPEDRCA = :id
+            AND CODPROD   = :prod`,
         { id: numpedrca, prod: Number(codprod) },
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
       const row: any = cur.rows?.[0];
       if (!row) throw new Error('Item não encontrado no carrinho.');
+
       const oldQt = Number(row.QT);
       const pvenda = Number(row.PVENDA);
 
       await connection.execute(
-        `UPDATE BRAMV_PEDIDOI SET QT = :qt WHERE NUMPEDRCA = :numpedrca AND CODPROD = :codprod`,
+        `UPDATE BRAMV_PEDIDOI
+            SET QT = :qt
+          WHERE NUMPEDRCA = :numpedrca
+            AND CODPROD   = :codprod`,
         { qt, numpedrca, codprod }, { autoCommit: false }
       );
 
       const deltaValor = (Number(qt) - oldQt) * pvenda;
       await connection.execute(
         `UPDATE BRAMV_PEDIDOC
-           SET VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
-         WHERE NUMPEDRCA = :id`,
+            SET VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) + :delta)
+          WHERE NUMPEDRCA = :id`,
         { delta: deltaValor, id: numpedrca }
       );
 
@@ -142,7 +156,7 @@ export const atualizarItem = async (req: any, res: any) => {
     });
     res.status(200).json({ success: true });
   } catch (err) {
-    console.error("Erro ao atualizar item:", err);
+    console.error('Erro ao atualizar item:', err);
     res.status(500).json({ error: 'Erro ao atualizar item.' });
   }
 };
@@ -154,27 +168,32 @@ export const removerItem = async (req: any, res: any) => {
       const numpedrca = await findOrCreateCartHeader(connection, Number(codusuario));
 
       const cur = await connection.execute(
-        `SELECT QT, PVENDA FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id AND CODPROD = :prod`,
+        `SELECT QT, PVENDA
+           FROM BRAMV_PEDIDOI
+          WHERE NUMPEDRCA = :id
+            AND CODPROD   = :prod`,
         { id: numpedrca, prod: Number(codprod) },
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
       const row: any = cur.rows?.[0];
-      if (!row) {
-      } else {
+
+      if (row) {
         const qt = Number(row.QT);
         const pv = Number(row.PVENDA);
         const deltaValor = qt * pv;
 
         await connection.execute(
-          `DELETE FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :numpedrca AND CODPROD = :codprod`,
+          `DELETE FROM BRAMV_PEDIDOI
+            WHERE NUMPEDRCA = :numpedrca
+              AND CODPROD   = :codprod`,
           { numpedrca, codprod }, { autoCommit: false }
         );
 
         await connection.execute(
           `UPDATE BRAMV_PEDIDOC
-             SET QTD_ITENS = GREATEST(0, NVL(QTD_ITENS,0) - 1),
-                 VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) - :delta)
-           WHERE NUMPEDRCA = :id`,
+              SET QTD_ITENS  = GREATEST(0, NVL(QTD_ITENS,0) - 1),
+                  VALOR_TOTAL = GREATEST(0, NVL(VALOR_TOTAL,0) - :delta)
+            WHERE NUMPEDRCA = :id`,
           { delta: deltaValor, id: numpedrca }
         );
       }
@@ -183,7 +202,7 @@ export const removerItem = async (req: any, res: any) => {
     });
     res.status(200).json({ success: true });
   } catch (err) {
-    console.error("Erro ao remover item:", err);
+    console.error('Erro ao remover item:', err);
     res.status(500).json({ error: 'Erro ao remover item.' });
   }
 };
@@ -192,16 +211,39 @@ export const submeterCarrinho = async (req: any, res: any) => {
   const { codusuario } = req.params;
   try {
     await withConnection(async (connection) => {
-      const result = await connection.execute(
-        `UPDATE BRAMV_PEDIDOC SET STATUS = 5 WHERE CODUSUARIO = :1 AND STATUS = 0`,
-        [codusuario]
+      const head = await connection.execute(
+        `SELECT NUMPEDRCA
+           FROM BRAMV_PEDIDOC
+          WHERE CODUSUARIO = :cod
+            AND STATUS = 0
+          FOR UPDATE`,
+        { cod: Number(codusuario) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
-      if (result.rowsAffected === 0) throw new Error('Nenhum carrinho ativo para submeter.');
+      const row: any = head.rows?.[0];
+      if (!row) throw new Error('Nenhum carrinho ativo para submeter.');
+
+      const numpedrca = Number(row.NUMPEDRCA);
+
+      const result = await connection.execute(
+        `UPDATE BRAMV_PEDIDOC
+            SET STATUS = 5
+          WHERE NUMPEDRCA = :id
+            AND STATUS = 0`,
+        { id: numpedrca }
+      );
+
+      if ((result.rowsAffected || 0) === 0) {
+        throw new Error('Carrinho já submetido ou indisponível.');
+      }
+
       await connection.commit();
+      console.log('[CARRINHO][SUBMIT]', { codusuario: Number(codusuario), numpedrca });
+
+      res.status(200).json({ success: true, message: 'Pedido enviado para aprovação.', numpedrca });
     });
-    res.status(200).json({ success: true, message: `Pedido enviado para aprovação.` });
   } catch (err: any) {
-    console.error("Erro ao submeter carrinho:", err);
+    console.error('Erro ao submeter carrinho:', err);
     res.status(500).json({ error: err.message || 'Erro ao submeter o pedido.' });
   }
 };
