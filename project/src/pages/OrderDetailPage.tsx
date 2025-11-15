@@ -19,7 +19,6 @@ const OrderDetailPage = () => {
 
   const updateStatusAPI = useCallback(
     async (newStatus: number, conditionStatus?: number, motivo?: string) => {
-      // PUT simples; quem chama trata status
       const resp = await fetch(`/api/pedido/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -38,10 +37,8 @@ const OrderDetailPage = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // ao entrar, tenta marcar como Em Análise se ainda estiver Pendente
         await updateStatusAPI(3, 5);
 
-        // aborta requisição antiga (navegação rápida)
         try { abortRef.current?.abort(); } catch {}
         abortRef.current = new AbortController();
         const timeout = setTimeout(() => abortRef.current?.abort(), 12_000);
@@ -67,13 +64,11 @@ const OrderDetailPage = () => {
 
     return () => {
       mounted = false;
-      // Se ficou em análise, tenta devolver a pendente (best-effort)
       if (order?.status === 3) {
         updateStatusAPI(5, 3).catch(() => {});
       }
       try { abortRef.current?.abort(); } catch {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function handleApprove() {
@@ -83,7 +78,6 @@ const OrderDetailPage = () => {
     try {
       const res = await updateStatusAPI(1, order.status);
       if (res.status === 409) {
-        // Conflito: recarrega o pedido atual e avisa
         const r = await fetch(`/api/pedido/${order.id}`, { cache: 'no-store' });
         if (r.ok) {
           const fresh: OrderDetail = await r.json();
@@ -93,7 +87,7 @@ const OrderDetailPage = () => {
         return;
       }
       if (!res.ok) throw new Error('Erro ao aprovar');
-      await refetchAllData(); // corrigido: executar a função
+      await refetchAllData();
       navigate('/painel-aprovacao');
     } catch (err: any) {
       setError(err?.message || 'Erro ao aprovar.');

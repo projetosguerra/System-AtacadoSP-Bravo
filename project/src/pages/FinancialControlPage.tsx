@@ -21,6 +21,8 @@ interface SectorOrder {
     VALOR_TOTAL: number;
 }
 
+type ViewMode = 'ONE' | 'ALL';
+
 const FinancialControlPage: React.FC = () => {
     const { setores, financialData, isLoading, updateSetorLimit /*, refreshFinancialData? */ } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,9 +30,10 @@ const FinancialControlPage: React.FC = () => {
     const [limitHistory, setLimitHistory] = useState<LimitHistory[]>([]);
     const [sectorOrders, setSectorOrders] = useState<SectorOrder[]>([]);
     const [isHistoryLoading, setHistoryLoading] = useState<boolean>(false);
+    const [viewMode, setViewMode] = useState<ViewMode>('ONE');
 
     const fetchDataForSetor = useCallback(async () => {
-        if (!selectedSetor) {
+        if (viewMode === 'ALL' || !selectedSetor) {
             setLimitHistory([]);
             setSectorOrders([]);
             return;
@@ -49,28 +52,51 @@ const FinancialControlPage: React.FC = () => {
             if (Array.isArray(historyData)) {
                 setLimitHistory(historyData);
             } else {
-                console.error("API de histórico não retornou um array:", historyData);
+                console.error('API de histórico não retornou um array:', historyData);
                 setLimitHistory([]);
             }
 
             if (Array.isArray(ordersData)) {
                 setSectorOrders(ordersData);
             } else {
-                console.error("API de pedidos do setor não retornou um array:", ordersData);
+                console.error('API de pedidos do setor não retornou um array:', ordersData);
                 setSectorOrders([]);
             }
         } catch (error) {
-            console.error("Erro ao buscar dados do setor:", error);
+            console.error('Erro ao buscar dados do setor:', error);
             setLimitHistory([]);
             setSectorOrders([]);
         } finally {
             setHistoryLoading(false);
         }
-    }, [selectedSetor]);
+    }, [selectedSetor, viewMode]);
 
     useEffect(() => {
         fetchDataForSetor();
     }, [fetchDataForSetor]);
+
+    // Dados agregados para TODOS
+    const allUnitsRows = useMemo(() => {
+        return (setores || []).map((s) => {
+            const gasto = financialData?.gastosPorSetor.find(g => String(g.CODSETOR) === String(s.CODSETOR))?.GASTO_TOTAL || 0;
+            const limite = s.SALDO || 0;
+            const disponivel = limite - gasto;
+            return {
+                codsetor: s.CODSETOR,
+                descricao: s.DESCRICAO,
+                limite,
+                gasto,
+                disponivel
+            };
+        });
+    }, [setores, financialData]);
+
+    const allUnitsTotals = useMemo(() => {
+        const totalLimite = (setores || []).reduce((acc, s) => acc + (s.SALDO || 0), 0);
+        const totalGasto = (financialData?.gastosPorSetor || []).reduce((acc, g: any) => acc + (g.GASTO_TOTAL || 0), 0);
+        const totalDisp = totalLimite - totalGasto;
+        return { totalLimite, totalGasto, totalDisp };
+    }, [setores, financialData]);
 
     const selectedData = useMemo(() => {
         if (!selectedSetor) return null;
@@ -86,12 +112,20 @@ const FinancialControlPage: React.FC = () => {
     }, [selectedSetor, setores, financialData]);
 
     const handleSetorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const selected = setores.find(s => String(s.CODSETOR) === e.target.value) || null;
+        const value = e.target.value;
+        if (value === 'ALL') {
+            setSelectedSetor(null);
+            setViewMode('ALL');
+            return;
+        }
+        const selected = setores.find(s => String(s.CODSETOR) === value) || null;
         setSelectedSetor(selected);
+        setViewMode('ONE');
     };
 
     const handleEditLimit = (setor: Setor) => {
         setSelectedSetor(setor);
+        setViewMode('ONE');
         setIsModalOpen(true);
     };
 
@@ -101,7 +135,7 @@ const FinancialControlPage: React.FC = () => {
                 await updateSetorLimit(selectedSetor.CODSETOR, newLimit);
                 await fetchDataForSetor();
             } catch (error) {
-                console.error("Erro ao salvar o limite:", error);
+                console.error('Erro ao salvar o limite:', error);
             }
         }
     };
@@ -110,22 +144,32 @@ const FinancialControlPage: React.FC = () => {
         return <div className="p-8 text-center text-gray-500">A carregar dados financeiros...</div>;
     }
 
-    const kpiCards: KpiData[] = selectedData ? [
-        { title: 'Limite Total', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedData.limite) },
-        { title: 'Valor Gasto', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedData.gasto) },
-        { title: 'Saldo Disponível', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedData.disponivel) }
+    const currency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+    const kpiCardsAll: KpiData[] = [
+        { title: 'Limite Total (Todas as Unidades)', value: currency(allUnitsTotals.totalLimite) },
+        { title: 'Valor Gasto (Todas as Unidades)', value: currency(allUnitsTotals.totalGasto) },
+        { title: 'Saldo Disponível (Todas as Unidades)', value: currency(allUnitsTotals.totalDisp) }
+    ];
+
+    const kpiCardsSelected: KpiData[] = selectedData ? [
+        { title: 'Limite Total', value: currency(selectedData.limite) },
+        { title: 'Valor Gasto', value: currency(selectedData.gasto) },
+        { title: 'Saldo Disponível', value: currency(selectedData.disponivel) }
     ] : [];
 
     return (
         <div className="p-8 bg-gray-50 min-h-screen">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Controle Financeiro por Secretaria</h1>
+            <h1 className="text-3xl font-bold text-gray-800 mb-6">Controle Financeiro por Unidade Administrativa</h1>
+
             <div className="relative mt-4 md:mt-0 w-full md:w-72">
                 <select
-                    value={selectedSetor ? String(selectedSetor.CODSETOR) : ""}
+                    value={viewMode === 'ALL' ? 'ALL' : (selectedSetor ? String(selectedSetor.CODSETOR) : '')}
                     onChange={handleSetorChange}
                     className="w-full pl-4 pr-10 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
                 >
-                    <option value="">Selecione uma Secretaria...</option>
+                    <option value="">Selecione uma Unidade...</option>
+                    <option value="ALL">Todas as Unidades Administrativas</option>
                     {setores.map((setor) => (
                         <option key={setor.CODSETOR} value={setor.CODSETOR}>
                             {setor.DESCRICAO}
@@ -134,11 +178,68 @@ const FinancialControlPage: React.FC = () => {
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
             </div>
+
             <main>
-                {selectedData ? (
+                {viewMode === 'ALL' ? (
+                    <div className="space-y-8">
+                        {/* KPIs agregados */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                            {kpiCardsAll.map((kpi, index) => <KpiCard key={index} data={kpi} />)}
+                        </div>
+
+                        {/* Tabela-resumo de todas as Unidades */}
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                            <h3 className="text-lg font-medium text-gray-900 mb-4">Resumo Financeiro — Todas as Unidades Administrativas</h3>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-2 text-left font-medium text-gray-500">Unidade Administrativa</th>
+                                            <th className="px-4 py-2 text-left font-medium text-gray-500">Limite Total</th>
+                                            <th className="px-4 py-2 text-left font-medium text-gray-500">Valor Gasto</th>
+                                            <th className="px-4 py-2 text-left font-medium text-gray-500">Saldo Disponível</th>
+                                            <th className="px-4 py-2 text-left font-medium text-gray-500">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {allUnitsRows.map(row => (
+                                            <tr key={row.codsetor} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3">{row.descricao}</td>
+                                                <td className="px-4 py-3">{currency(row.limite)}</td>
+                                                <td className="px-4 py-3">{currency(row.gasto)}</td>
+                                                <td className="px-4 py-3">{currency(row.disponivel)}</td>
+                                                <td className="px-4 py-3">
+                                                    <button
+                                                        className="text-indigo-600 hover:text-indigo-900"
+                                                        onClick={() => {
+                                                            const s = setores.find(ss => ss.CODSETOR === row.codsetor) || null;
+                                                            setSelectedSetor(s);
+                                                            setViewMode('ONE');
+                                                        }}
+                                                    >
+                                                        Ver detalhes
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="bg-gray-50">
+                                        <tr>
+                                            <td className="px-4 py-3 font-semibold text-gray-700">Totais</td>
+                                            <td className="px-4 py-3 font-semibold">{currency(allUnitsTotals.totalLimite)}</td>
+                                            <td className="px-4 py-3 font-semibold">{currency(allUnitsTotals.totalGasto)}</td>
+                                            <td className="px-4 py-3 font-semibold">{currency(allUnitsTotals.totalDisp)}</td>
+                                            <td />
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                ) : selectedData ? (
                     <div className="space-y-8">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                            {kpiCards.map((kpi, index) => <KpiCard key={index} data={kpi} />)}
+                            {kpiCardsSelected.map((kpi, index) => <KpiCard key={index} data={kpi} />)}
                         </div>
 
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -176,10 +277,10 @@ const FinancialControlPage: React.FC = () => {
                                                     <tr key={index}>
                                                         <td className="px-4 py-3">{new Date(entry.DATA_ALT).toLocaleDateString('pt-BR')}</td>
                                                         <td className="px-4 py-3 text-red-600 font-medium">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entry.VALOR_ANT)}
+                                                            {currency(entry.VALOR_ANT)}
                                                         </td>
                                                         <td className="px-4 py-3 text-green-600 font-medium">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entry.NOVO_VALOR)}
+                                                            {currency(entry.NOVO_VALOR)}
                                                         </td>
                                                         <td className="px-4 py-3">{entry.PRIMEIRO_NOME}</td>
                                                     </tr>
@@ -193,7 +294,7 @@ const FinancialControlPage: React.FC = () => {
                                     <div>
                                         <div className="flex items-center gap-2 text-gray-600 mb-2">
                                             <ShoppingCart className="w-5 h-5" />
-                                            <h4 className="font-semibold">Pedidos Aprovados do Setor</h4>
+                                            <h4 className="font-semibold">Pedidos Aprovados da Unidade Administrativa</h4>
                                         </div>
                                         <table className="min-w-full text-sm">
                                             <thead className="bg-gray-50">
@@ -213,13 +314,13 @@ const FinancialControlPage: React.FC = () => {
                                                         <td className="px-4 py-3">{order.SOLICITANTE}</td>
                                                         <td className="px-4 py-3">{order.QTD_ITENS}</td>
                                                         <td className="px-4 py-3 text-green-600 font-medium">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.VALOR_TOTAL)}
+                                                            {currency(order.VALOR_TOTAL)}
                                                         </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
-                                        {sectorOrders.length === 0 && <p className="text-center text-gray-500 mt-2 py-4">Nenhum pedido aprovado encontrado para este setor.</p>}
+                                        {sectorOrders.length === 0 && <p className="text-center text-gray-500 mt-2 py-4">Nenhum pedido aprovado encontrado para esta unidade.</p>}
                                     </div>
                                 </div>
                             )}
@@ -234,7 +335,7 @@ const FinancialControlPage: React.FC = () => {
                 )}
             </main>
 
-            {isModalOpen && (
+            {isModalOpen && selectedSetor && (
                 <EditLimitModal
                     isOpen={isModalOpen}
                     setor={selectedSetor}

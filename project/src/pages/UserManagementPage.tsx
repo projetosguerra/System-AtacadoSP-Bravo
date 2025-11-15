@@ -42,7 +42,14 @@ export const UserManagementPage = () => {
 
   const handleUserDeleted = () => {
     setDetailsModalOpen(false);
+    setSelectedUser(null);
     fetchAllUsers();
+  };
+
+  const handleUserUpdated = () => {
+    fetchAllUsers();
+    setDetailsModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handleViewDetails = (user: User) => {
@@ -74,7 +81,7 @@ export const UserManagementPage = () => {
           <h1 className="text-3xl font-bold text-gray-900">Gerenciamento de Usuários</h1>
           <button
             onClick={() => setAddModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition-all duration-200"
+            className="flex items-center gap-2 px-5 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition-all duração-200"
           >
             <Plus className="w-5 h-5" />
             Adicionar Usuário
@@ -219,8 +226,10 @@ export const UserManagementPage = () => {
             onClose={() => {
               console.log("Função 'onClose' foi chamada na página principal (UserManagementPage).");
               setDetailsModalOpen(false);
+              setSelectedUser(null);
             }}
             onUserDeleted={handleUserDeleted}
+            onUserUpdated={handleUserUpdated}
           />
         </div>
       </main>

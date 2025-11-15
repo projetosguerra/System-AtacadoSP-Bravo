@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PedidoPendente } from '../types';
 
@@ -9,16 +9,20 @@ interface PendingOrdersTableProps {
 
 const toNumber = (x: any) => Number.isFinite(Number(x)) ? Number(x) : 0;
 
+type SortBy = 'data' | 'valor' | 'id';
+type SortDir = 'asc' | 'desc';
+
 const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [page, setPage] = useState(1);      // 1-based
+  const [uaFilter, setUaFilter] = useState<string>(''); 
+  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // por Data
 
-  // Volta para página 1 ao alterar busca/tamanho/ordem ou lista
-  useEffect(() => { setPage(1); }, [searchTerm, pageSize, sortDir, pedidos]);
+  const [sortBy, setSortBy] = useState<SortBy>('data');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
-  // 1) Deduplicação por id (defensivo)
+  useEffect(() => { setPage(1); }, [searchTerm, uaFilter, pageSize, sortBy, sortDir, pedidos]);
+
   const unique = useMemo(() => {
     const map = new Map<string | number, PedidoPendente>();
     for (const p of pedidos || []) {
@@ -27,47 +31,76 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
     return Array.from(map.values());
   }, [pedidos]);
 
-  // 2) Filtro por busca (em todos os campos relevantes)
+  const uaOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of unique) {
+      const name = (p as any)?.unidadeAdmin ? String((p as any).unidadeAdmin) : 'N/A';
+      set.add(name);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [unique]);
+
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return unique;
-    return unique.filter((p) =>
-      [
+
+    return unique.filter((p) => {
+      const uaName = (p as any)?.unidadeAdmin ? String((p as any).unidadeAdmin) : 'N/A';
+      if (uaFilter && uaName !== uaFilter) return false;
+
+      if (!term) return true;
+
+      return [
         String(p.id),
         p.solicitante ?? '',
-        p.unidadeAdmin ?? '',
+        uaName,
         p.data ?? '',
         String(p.qtdItens ?? ''),
-        String(p.valor ?? ''),
-      ].some((v) => String(v).toLowerCase().includes(term))
-    );
-  }, [unique, searchTerm]);
+        String((p as any)?.valor ?? ''),
+      ].some((v) => String(v).toLowerCase().includes(term));
+    });
+  }, [unique, uaFilter, searchTerm]);
 
-  // 3) Ordenação por Data
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
-      const da = new Date(a.data as any).getTime() || 0;
-      const db = new Date(b.data as any).getTime() || 0;
-      return sortDir === 'asc' ? da - db : db - da;
+      let av = 0;
+      let bv = 0;
+
+      if (sortBy === 'data') {
+        av = new Date((a as any).data).getTime() || 0;
+        bv = new Date((b as any).data).getTime() || 0;
+      } else if (sortBy === 'valor') {
+        av = toNumber((a as any)?.valor);
+        bv = toNumber((b as any)?.valor);
+      } else if (sortBy === 'id') {
+        const an = Number((a as any)?.id);
+        const bn = Number((b as any)?.id);
+        if (Number.isFinite(an) && Number.isFinite(bn)) {
+          av = an; bv = bn;
+        } else {
+          return sortDir === 'asc'
+            ? String((a as any)?.id).localeCompare(String((b as any)?.id), 'pt-BR')
+            : String((b as any)?.id).localeCompare(String((a as any)?.id), 'pt-BR');
+        }
+      }
+
+      const diff = av - bv;
+      return sortDir === 'asc' ? diff : -diff;
     });
     return arr;
-  }, [filtered, sortDir]);
+  }, [filtered, sortBy, sortDir]);
 
-  // 4) Paginação local
   const total = sorted.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages]);
 
   const startIndex = (safePage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, total);
   const pageItems = sorted.slice(startIndex, endIndex);
 
-  // 5) Labels e formatações
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(toNumber(value));
 
@@ -79,7 +112,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
       : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  // 6) Botões numéricos de página
   const maxButtons = 7;
   const half = Math.floor(maxButtons / 2);
   let startBtn = Math.max(1, safePage - half);
@@ -89,12 +121,10 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
 
   return (
     <div className="bg-white rounded-lg">
-      {/* Table Header */}
       <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Tabela de Pedidos Pendentes</h2>
-        
+
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Search Bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -106,7 +136,21 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
             />
           </div>
 
-          {/* Page size */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Unidade Adm.</label>
+            <select
+              className="border rounded px-2 py-2 text-sm"
+              value={uaFilter}
+              onChange={(e) => setUaFilter(e.target.value)}
+              title="Filtrar por Unidade Administrativa"
+            >
+              <option value="">Todas</option>
+              {uaOptions.map((ua) => (
+                <option key={ua} value={ua}>{ua}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">Mostrar</label>
             <select
@@ -120,32 +164,34 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
             </select>
           </div>
 
-          {/* Ordenação (Data) */}
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">Ordem</label>
+            <label className="text-sm text-gray-600">Ordenar por</label>
+            <select
+              className="border rounded px-2 py-2 text-sm"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortBy)}
+              title="Campo de ordenação"
+            >
+              <option value="data">Data</option>
+              <option value="valor">Valor</option>
+              <option value="id">ID</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Direção</label>
             <select
               className="border rounded px-2 py-2 text-sm"
               value={sortDir}
-              onChange={(e) => setSortDir(e.target.value as 'asc' | 'desc')}
+              onChange={(e) => setSortDir(e.target.value as SortDir)}
+              title="Direção de ordenação"
             >
-              <option value="desc">Mais recentes</option>
-              <option value="asc">Mais antigos</option>
+              <option value="desc">Descendente</option>
+              <option value="asc">Ascendente</option>
             </select>
           </div>
-
-          {/* Placeholder de filtro extra, se quiser evoluir depois */}
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-            title="Filtros avançados (em breve)"
-          >
-            <Filter className="w-4 h-4" />
-            Filtros
-          </button>
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -169,8 +215,8 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(pedido.data as any)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{pedido.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{pedido.solicitante}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{pedido.unidadeAdmin || 'N/A'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{pedido.qtdItens ?? 0}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{(pedido as any)?.unidadeAdmin || 'N/A'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{(pedido as any)?.qtdItens ?? 0}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                   {formatCurrency((pedido as any)?.valor)}
                 </td>
@@ -195,7 +241,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
         </table>
       </div>
 
-      {/* Table Footer */}
       <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
         <div className="text-sm text-gray-700">
           Mostrando {total === 0 ? 0 : startIndex + 1}-{endIndex} de {total} pedidos
@@ -215,7 +260,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({ pedidos }) => {
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {/* Botões numéricos */}
           {startBtn > 1 && (
             <>
               <button

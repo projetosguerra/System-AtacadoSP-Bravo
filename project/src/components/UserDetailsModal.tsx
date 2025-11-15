@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { ConfirmationModal } from './ConfirmationModal';
 
 interface Setor {
     CODSETOR: number;
@@ -26,7 +25,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-    // Estados para edição
     const [primeiroNome, setPrimeiroNome] = useState('');
     const [ultimoNome, setUltimoNome] = useState('');
     const [genero, setGenero] = useState('');
@@ -76,7 +74,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
     const handleCancelEdit = () => {
         if (user) {
             setPrimeiroNome(user.primeiroNome);
-            setPrimeiroNome(user.primeiroNome);
             setUltimoNome(user.ultimoNome || '');
             setGenero(user.genero || '');
             setIdFuncionario(user.idFuncionario || '');
@@ -87,46 +84,62 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
             setError(null);
             setShowDeleteConfirm(false);
             setIsEditMode(false);
+        } else {
+            setIsEditMode(false);
+            setError(null);
         }
-        setIsEditMode(false);
-        setError(null);
     };
 
-    const handleSave = async () => {
+    const handleSave = async (e?: React.FormEvent) => {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+
         setIsLoading(true);
         setError(null);
 
-        const userDataToUpdate = {
+        const setorValido = typeof codsetor === 'number' && !Number.isNaN(codsetor);
+        if (!setorValido) {
+            setIsLoading(false);
+            setError('Selecione um setor válido para o usuário.');
+            return;
+        }
+
+        const payload = {
             primeiroNome,
             ultimoNome,
             email,
             tipoUsuario: tipousuario,
-            codSetor: codsetor,
             genero,
             telefone,
-            idFuncionario
+            idFuncionario,
+            codSetor: codsetor
         };
-
-        console.log('Dados que serão enviados para a API (PUT):', userDataToUpdate);
 
         try {
             const response = await fetch(`/api/usuarios/${user?.codUsuario}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(userDataToUpdate), 
+                body: JSON.stringify(payload),
             });
 
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Falha ao atualizar usuário');
+            const contentType = response.headers.get('content-type') || '';
+            let data: any = null;
+            let rawText = '';
+
+            if (contentType.includes('application/json')) {
+                data = await response.json().catch(() => null);
+            } else {
+                rawText = await response.text().catch(() => '');
             }
 
-            if (onUserUpdated) {
-                onUserUpdated();
+            if (!response.ok) {
+                const msg = (data && (data.error || data.message)) || rawText || 'Falha ao atualizar usuário';
+                throw new Error(msg);
             }
+
+            if (onUserUpdated) onUserUpdated();
             setIsEditMode(false);
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Erro ao salvar alterações');
         } finally {
             setIsLoading(false);
         }
@@ -142,12 +155,13 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                 method: 'DELETE',
             });
             if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.error || 'Falha ao excluir usuário.');
+                const result = await response.json().catch(() => null);
+                const msg = (result && (result.error || result.message)) || 'Falha ao excluir usuário.';
+                throw new Error(msg);
             }
             onUserDeleted();
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Erro ao excluir usuário');
             setShowDeleteConfirm(false);
         } finally {
             setIsDeleting(false);
@@ -334,7 +348,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                             )}
                         </div>
                     ) : (
-                        // Edit Mode
                         <form onSubmit={handleSave} className="p-6">
                             <div className="space-y-6">
                                 <div>
@@ -403,7 +416,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                                     </div>
                                 </div>
 
-                                {/* Seção de Informações de Contato */}
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                                         <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
@@ -422,7 +434,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                                                 type="tel"
                                                 value={telefone}
                                                 onChange={(e) => setTelefone(e.target.value)}
-                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white font-mono"
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duração-200 bg-white font-mono"
                                                 placeholder="(11) 99999-9999"
                                             />
                                         </div>
@@ -468,27 +480,25 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                                             </select>
                                         </div>
 
-                                        {/* Campo de Setor - Apenas para Solicitante */}
-                                        {tipousuario === 3 && (
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Setor (Secretaria) <span className="text-red-500">*</span>
-                                                </label>
-                                                <select
-                                                    value={codsetor}
-                                                    onChange={(e) => setCodsetor(Number(e.target.value))}
-                                                    required={tipousuario === 3}
-                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white"
-                                                >
-                                                    <option value="" disabled>Selecione um setor</option>
-                                                    {setores.map(setor => (
-                                                        <option key={setor.CODSETOR} value={setor.CODSETOR}>
-                                                            {setor.DESCRICAO}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        )}
+                                        {/* Campo de Setor - Obrigatório para todos os tipos */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Setor (Secretaria) <span className="text-red-500">*</span>
+                                            </label>
+                                            <select
+                                                value={codsetor}
+                                                onChange={(e) => setCodsetor(e.target.value === '' ? '' : Number(e.target.value))}
+                                                required
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white"
+                                            >
+                                                <option value="" disabled>Selecione um setor</option>
+                                                {setores.map(setor => (
+                                                    <option key={setor.CODSETOR} value={setor.CODSETOR}>
+                                                        {setor.DESCRICAO}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -508,10 +518,10 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                     )}
                 </div>
 
-                {/* Delete Confirmation Modal */}
+                {/* Delete Confirmation Overlay (único) */}
                 {showDeleteConfirm && (
-                    <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-10 rounded-2xl">
-                        <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+                    <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 rounded-2xl">
+                        <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
                             <div className="flex items-center mb-4">
                                 <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
                                     <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -520,12 +530,15 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                                 </div>
                                 <h3 className="text-lg font-semibold text-gray-900">Confirmar Exclusão</h3>
                             </div>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Tem certeza que deseja excluir o usuário {user.primeiroNome}? Esta ação não pode ser desfeita.
+                            </p>
                             <div className="flex justify-end space-x-3">
                                 <button
-                                    onClick={() => setIsDeleting(true)}
-                                    disabled={isLoading}
+                                    onClick={handleDelete}
+                                    disabled={isDeleting}
                                     className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-300">
-                                    Excluir
+                                    {isDeleting ? 'Excluindo...' : 'Excluir'}
                                 </button>
                                 <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
                                     Cancelar
@@ -538,7 +551,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                 {/* Footer */}
                 <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
                     {!isEditMode ? (
-                        // View Mode Footer
                         <div className="flex justify-between">
                             <button
                                 type="button"
@@ -576,7 +588,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                             </div>
                         </div>
                     ) : (
-                        // Edit Mode Footer
                         <div className="flex justify-end space-x-3">
                             <button
                                 type="button"
@@ -586,9 +597,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                                 Cancelar
                             </button>
                             <button
+                                onClick={handleSave}
                                 type="submit"
                                 disabled={isLoading}
-                                onClick={handleSave}
                                 className="px-6 py-3 bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white rounded-lg font-medium transition-all duration-200 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center space-x-2"
                             >
                                 {isLoading ? (
@@ -611,13 +622,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                     )}
                 </div>
             </div>
-            <ConfirmationModal
-                isOpen={isDeleting}
-                onClose={() => setIsDeleting(false)}
-                onConfirm={handleDelete}
-                title="Confirmar Exclusão"
-                message={`Tem certeza que deseja excluir o usuário ${user.primeiroNome}? Esta ação não pode ser desfeita.`}
-            />
         </div>
     );
 };

@@ -15,7 +15,6 @@ const EditLimitModal: React.FC<EditLimitModalProps> = ({ isOpen, onClose, setor,
 
   useEffect(() => {
     if (setor) {
-      // Armazena como "centavos" para manter a máscara consistente
       setNewLimit((setor.SALDO || 0).toFixed(2).replace('.', ''));
     }
   }, [setor]);
@@ -33,10 +32,8 @@ const EditLimitModal: React.FC<EditLimitModalProps> = ({ isOpen, onClose, setor,
       try {
         setIsSaving(true);
         await Promise.resolve(onSave(correctLimitValue));
-        // Fecha o modal somente após sucesso
         onClose();
       } catch (err) {
-        // Mantém o modal aberto em caso de erro para o usuário tentar novamente
         console.error('Erro ao salvar novo limite:', err);
       } finally {
         setIsSaving(false);
