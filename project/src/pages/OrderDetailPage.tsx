@@ -37,7 +37,7 @@ const OrderDetailPage = () => {
       setIsLoading(true);
       setError(null);
       try {
-        await updateStatusAPI(3, 5);
+        await updateStatusAPI(3, 5); 
 
         try { abortRef.current?.abort(); } catch {}
         abortRef.current = new AbortController();
@@ -76,19 +76,22 @@ const OrderDetailPage = () => {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await updateStatusAPI(1, order.status);
-      if (res.status === 409) {
-        const r = await fetch(`/api/pedido/${order.id}`, { cache: 'no-store' });
-        if (r.ok) {
-          const fresh: OrderDetail = await r.json();
-          setOrder(fresh);
-        }
-        setError('Conflito: o pedido já foi atualizado por outro usuário. Atualizamos os dados.');
-        return;
+      const res = await fetch(`/api/pedido/${order.id}/aprovar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codFilial: '1', frete: 0 })
+      });
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (body?.logs?.length) console.warn('[Aprovação] Logs do processamento:', body.logs);
+        throw new Error(body?.error || 'Erro ao aprovar/processar o pedido.');
       }
-      if (!res.ok) throw new Error('Erro ao aprovar');
+
       await refetchAllData();
-      navigate('/painel-aprovacao');
+      navigate('/painel-aprovacao', {
+        state: { notice: `Pedido #${order.id} aprovado e processado.` }
+      });
     } catch (err: any) {
       setError(err?.message || 'Erro ao aprovar.');
     } finally {
@@ -108,7 +111,9 @@ const OrderDetailPage = () => {
       const res = await updateStatusAPI(2, undefined, motivo);
       if (!res.ok) throw new Error('Erro ao reprovar');
       await refetchAllData();
-      navigate('/painel-aprovacao');
+      navigate('/painel-aprovacao', {
+        state: { notice: `Pedido #${id} reprovado.` }
+      });
     } catch (err: any) {
       setError(`Falha ao reprovar: ${err?.message || 'desconhecido'}`);
     } finally {
@@ -188,10 +193,8 @@ const OrderDetailPage = () => {
       <RejectModal
         isOpen={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
-        orderInfo={{ id: order.id.toString(), solicitante: order.solicitante.nome }}
-        onConfirm={async (motivo: string) => {
-          await handleReprove(motivo);
-        }}
+        orderInfo={{ id: (order.id).toString(), solicitante: order.solicitante.nome }}
+        onConfirm={async (motivo: string) => { await handleReprove(motivo); }}
       />
     </div>
   );

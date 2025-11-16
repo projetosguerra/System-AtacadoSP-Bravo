@@ -1,28 +1,140 @@
 import oracledb from 'oracledb';
 import { withConnection } from '../db/pool.js';
 
+type PrecheckIssue =
+  | 'CLIENTE_INEXISTENTE'
+  | 'COND_PAGAMENTO_INEXISTENTE'
+  | 'COBRANCA_INEXISTENTE'
+  | 'USUARIO_SEM_PARAMETRO_NUMPED'
+  | 'FILIAL_INEXISTENTE'
+  | 'FILIAL_SEM_PARAMETRO'
+  | 'PEDIDO_SEM_ITENS'
+  | 'ITENS_SEM_PRODUTO';
+
+function normalizeFilial(f: string | number | undefined | null): string {
+  const s = String(f ?? '').trim();
+  if (!s) return '';
+  const noZeros = s.replace(/^0+/, '');
+  return noZeros || '0';
+}
+
+async function precheckAprovacao(connection: oracledb.Connection, {
+  codCli,
+  codFilial,
+  numpedrca,
+}: { codCli: number; codFilial: string; numpedrca: number; }) {
+  const issues: PrecheckIssue[] = [];
+
+  const cliRes = await connection.execute(
+    `SELECT NVL(CODUSUR2, CODUSUR1) CODUSUR, CODPLPAG, CODCOB
+       FROM PCCLIENT
+      WHERE CODCLI = :codCli`,
+    { codCli },
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  const cli: any = cliRes.rows?.[0];
+  if (!cli) {
+    issues.push('CLIENTE_INEXISTENTE');
+  } else {
+    try {
+      const pl = await connection.execute(
+        `SELECT 1 FROM PCPLPAG WHERE CODPLPAG = :codpl`,
+        { codpl: cli.CODPLPAG },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      if (!pl.rows?.length) issues.push('COND_PAGAMENTO_INEXISTENTE');
+    } catch { issues.push('COND_PAGAMENTO_INEXISTENTE'); }
+
+    try {
+      const cob = await connection.execute(
+        `SELECT 1 FROM PCCOB WHERE CODCOB = :cob`,
+        { cob: cli.CODCOB },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      if (!cob.rows?.length) issues.push('COBRANCA_INEXISTENTE');
+    } catch { issues.push('COBRANCA_INEXISTENTE'); }
+
+    try {
+      const usu = await connection.execute(
+        `SELECT PROXNUMPEDFORCA FROM PCUSUARI WHERE CODUSUR = :u`,
+        { u: cli.CODUSUR },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      if (!usu.rows?.length) issues.push('USUARIO_SEM_PARAMETRO_NUMPED');
+    } catch { issues.push('USUARIO_SEM_PARAMETRO_NUMPED'); }
+  }
+
+  const filialNum = Number(codFilial);
+  try {
+    const f = await connection.execute(
+      `SELECT 1 FROM PCFILIAL WHERE CODIGO = :cod`,
+      { cod: filialNum },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    if (!f.rows?.length) issues.push('FILIAL_INEXISTENTE');
+  } catch {
+  }
+
+  try {
+    const pf = await connection.execute(
+      `SELECT 1 FROM SAOPAULO.PCPARAMFILIAL WHERE CODFILIAL IN (:f1,:f2)`,
+      { f1: String(filialNum), f2: String(filialNum).padStart(2, '0') },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    if (!pf.rows?.length) issues.push('FILIAL_SEM_PARAMETRO');
+  } catch {
+  }
+
+  const itens = await connection.execute(
+    `SELECT COUNT(*) QTD FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id`,
+    { id: numpedrca },
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  const qtd = Number((itens.rows?.[0] as any)?.QTD ?? 0);
+  if (qtd <= 0) issues.push('PEDIDO_SEM_ITENS');
+
+  const faltandoProd = await connection.execute(
+    `SELECT COUNT(*) MISSING
+       FROM BRAMV_PEDIDOI i
+      WHERE i.NUMPEDRCA = :id
+        AND NOT EXISTS (SELECT 1 FROM PCPRODUT p WHERE p.CODPROD = i.CODPROD)`,
+    { id: numpedrca },
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  const miss = Number((faltandoProd.rows?.[0] as any)?.MISSING ?? 0);
+  if (miss > 0) issues.push('ITENS_SEM_PRODUTO');
+
+  return issues;
+}
+
 export const obterPedido = async (req: any, res: any) => {
   const { id } = req.params;
   try {
     const pedidoDetails = await withConnection(async (connection) => {
       const headerResult = await connection.execute(
-        `SELECT p.NUMPEDRCA, p.DATA, p.STATUS, u.PRIMEIRO_NOME || ' ' || u.ULTIMO_NOME AS NOME, u.EMAIL, s.DESCRICAO AS SETOR 
-         FROM BRAMV_PEDIDOC p 
-         LEFT JOIN BRAMV_USUARIOS u ON p.CODUSUARIO = u.CODUSUARIO 
-         LEFT JOIN BRAMV_SETOR s ON u.CODSETOR = s.CODSETOR 
-         WHERE p.NUMPEDRCA = :id`,
+        `SELECT p.NUMPEDRCA, p.DATA, p.STATUS,
+                u.PRIMEIRO_NOME || ' ' || u.ULTIMO_NOME AS NOME,
+                u.EMAIL,
+                s.DESCRICAO AS SETOR
+           FROM BRAMV_PEDIDOC p
+           LEFT JOIN BRAMV_USUARIOS u ON p.CODUSUARIO = u.CODUSUARIO
+           LEFT JOIN BRAMV_SETOR s ON u.CODSETOR = s.CODSETOR
+          WHERE p.NUMPEDRCA = :id`,
         [id],
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
       if (!headerResult.rows?.length) throw new Error('Pedido não encontrado');
       const header: any = headerResult.rows[0];
+
       const itemsResult = await connection.execute(
-        `SELECT i.CODPROD, i.QT, i.PVENDA, p.DESCRICAO, p.UNIDADE 
-         FROM BRAMV_PEDIDOI i JOIN PCPRODUT p ON i.CODPROD = p.CODPROD 
-         WHERE i.NUMPEDRCA = :id`,
+        `SELECT i.CODPROD, i.QT, i.PVENDA, p.DESCRICAO, p.UNIDADE
+           FROM BRAMV_PEDIDOI i
+           JOIN PCPRODUT p ON i.CODPROD = p.CODPROD
+          WHERE i.NUMPEDRCA = :id`,
         [id],
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
+
       return {
         id: header.NUMPEDRCA,
         data: header.DATA,
@@ -43,6 +155,27 @@ export const obterPedido = async (req: any, res: any) => {
   } catch (err: any) {
     console.error(`[API] ERRO ao buscar pedido #${id}:`, err);
     res.status(404).json({ error: err.message || 'Pedido não encontrado.' });
+  }
+};
+
+export const obterLogsPedido = async (req: any, res: any) => {
+  const { id } = req.params;
+  try {
+    const logs = await withConnection(async (connection) => {
+      const r = await connection.execute(
+        `SELECT *
+           FROM LOG_PROCESSA_PEDIDO
+          WHERE NUMPEDRCA = :id
+          ORDER BY IDLOG DESC`,
+        { id: Number(id) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      return r.rows ?? [];
+    });
+    res.json({ data: logs });
+  } catch (err: any) {
+    console.error('[API] ERRO ao obter logs do pedido:', err);
+    res.status(500).json({ error: err?.message || 'Falha ao obter logs.' });
   }
 };
 
@@ -90,11 +223,24 @@ export const atualizarStatusPedido = async (req: any, res: any) => {
 export const aprovarPedido = async (req: any, res: any) => {
   const { id } = req.params;
   const codCli = Number(process.env.CODCLI ?? 27995);
-  const codFilial = String(req.body?.codFilial ?? process.env.CODFILIAL ?? '01');
+  const codFilialRaw = String(req.body?.codFilial ?? process.env.CODFILIAL ?? '01');
+  const codFilial = normalizeFilial(codFilialRaw); 
   const vlFrete = Number(req.body?.frete ?? 0);
 
   try {
     const result = await withConnection(async (connection) => {
+      const issues = await precheckAprovacao(connection, {
+        codCli,
+        codFilial,
+        numpedrca: Number(id),
+      });
+      if (issues.length) {
+        const e = new Error('Pré-condições não atendidas para aprovação.');
+        (e as any).statusCode = 422;
+        (e as any).issues = issues;
+        throw e;
+      }
+
       const hdr = await connection.execute(
         `SELECT STATUS FROM BRAMV_PEDIDOC WHERE NUMPEDRCA = :id`,
         { id: Number(id) },
@@ -112,8 +258,23 @@ export const aprovarPedido = async (req: any, res: any) => {
         );
         return { alreadyApproved: true, logs: logs.rows ?? [] };
       }
-      if (statusAtual !== 5) {
-        throw new Error(`Pedido não está pendente para aprovação (status atual=${statusAtual}).`);
+
+      if (statusAtual === 5) {
+        const up = await connection.execute(
+          `UPDATE BRAMV_PEDIDOC SET STATUS = 3 WHERE NUMPEDRCA = :id AND STATUS = 5`,
+          { id: Number(id) }
+        );
+        if ((up.rowsAffected ?? 0) === 0) {
+          const r2 = await connection.execute(
+            `SELECT STATUS FROM BRAMV_PEDIDOC WHERE NUMPEDRCA = :id`,
+            { id: Number(id) },
+            { outFormat: oracledb.OUT_FORMAT_OBJECT }
+          );
+          const s2 = Number((r2.rows?.[0] as any)?.STATUS ?? -1);
+          if (s2 !== 3) throw new Error(`Pedido mudou de status (atual=${s2}). Tente novamente.`);
+        }
+      } else if (statusAtual !== 3) {
+        throw new Error(`Pedido não está pendente/em análise (status atual=${statusAtual}).`);
       }
 
       await connection.execute(
@@ -135,13 +296,27 @@ export const aprovarPedido = async (req: any, res: any) => {
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
 
+      const totRes = await connection.execute(
+        `SELECT COUNT(*) AS QTD, SUM(QT * PVENDA) AS TOTAL
+           FROM BRAMV_PEDIDOI
+          WHERE NUMPEDRCA = :id`,
+        { id: Number(id) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const qtd = Number((totRes.rows?.[0] as any)?.QTD ?? 0);
+      const total = Number((totRes.rows?.[0] as any)?.TOTAL ?? 0);
+
       await connection.execute(
-        `UPDATE BRAMV_PEDIDOC SET STATUS = 1 WHERE NUMPEDRCA = :id`,
-        { id: Number(id) }
+        `UPDATE BRAMV_PEDIDOC
+            SET STATUS = 1,
+                QTD_ITENS = :qtd,
+                VALOR_TOTAL = :total
+          WHERE NUMPEDRCA = :id`,
+        { id: Number(id), qtd, total }
       );
 
       await connection.commit();
-      return { alreadyApproved: false, logs: logRes.rows ?? [] };
+      return { alreadyApproved: false, logs: logRes.rows ?? [], qtd, total };
     });
 
     return res.status(200).json({
@@ -149,9 +324,17 @@ export const aprovarPedido = async (req: any, res: any) => {
       message: result.alreadyApproved
         ? `Pedido #${id} já estava aprovado.`
         : `Pedido #${id} aprovado e processado no WinThor.`,
-      logs: result.logs
+      logs: result.logs,
+      totals: result.qtd !== undefined ? { qtd: result.qtd, total: result.total } : undefined
     });
   } catch (err: any) {
+    if (err?.statusCode === 422) {
+      return res.status(422).json({
+        error: err.message,
+        issues: err.issues as PrecheckIssue[]
+      });
+    }
+
     let logs: any[] = [];
     try {
       logs = await withConnection(async (connection) => {

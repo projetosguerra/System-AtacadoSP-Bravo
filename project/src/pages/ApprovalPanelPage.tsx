@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { RefreshCw, SlidersHorizontal, X } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import PendingOrdersTable from '../components/PendingOrdersTable';
@@ -14,6 +15,27 @@ const ApprovalPanelPage = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [list, setList] = useState<PedidoPendente[]>(ctxPendentes || []);
   const [error, setError] = useState<string | null>(null);
+
+  // Notice de acessibilidade (role=alert)
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [notice, setNotice] = useState<string | null>(null);
+  const alertRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const n = (location.state as any)?.notice;
+    if (n) {
+      setNotice(n);
+      // limpa o state da history para não reaparecer ao voltar
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, location.pathname, navigate]);
+  useEffect(() => {
+    if (notice && alertRef.current) {
+      alertRef.current.focus();
+      const t = setTimeout(() => setNotice(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [notice]);
 
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [selectedSetorId, setSelectedSetorId] = useState<string>('');
@@ -90,6 +112,7 @@ const ApprovalPanelPage = () => {
   useEffect(() => {
     setList(ctxPendentes || []);
     loadPendentes(days, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, selectedSetorId]);
 
   const displayList = useMemo(() => {
@@ -132,7 +155,27 @@ const ApprovalPanelPage = () => {
   };
 
   return (
-    <div className="space-y-8 p-8 bg-gray-50 min-h-full">
+    <div className="space-y-4 p-8 bg-gray-50 min-h-full">
+      {/* Alerta acessível pós-ação */}
+      {notice && (
+        <div
+          ref={alertRef}
+          role="alert"
+          aria-live="assertive"
+          tabIndex={-1}
+          className="p-3 rounded-md border border-green-200 bg-green-50 text-green-800 flex items-start justify-between"
+        >
+          <span className="text-sm">{notice}</span>
+          <button
+            onClick={() => setNotice(null)}
+            className="text-green-700 hover:text-green-900 text-sm font-medium"
+            aria-label="Fechar alerta"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Painel de Aprovação</h1>
 
