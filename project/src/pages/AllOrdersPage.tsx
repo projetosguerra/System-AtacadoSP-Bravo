@@ -3,6 +3,7 @@ import KpiCard from '../components/KpiCard';
 import OrdersHistoryTable from '../components/OrdersHistoryTable';
 import { KpiData } from '../types';
 import { useData } from '../context/DataContext';
+import OrderDetailsModal from '../components/OrderDetailsModal';
 
 const AllOrdersPage: React.FC = () => {
   const { orders, isLoading } = useData();
@@ -14,23 +15,25 @@ const AllOrdersPage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
+  const [filterUnit, setFilterUnit] = useState<string>('todas'); 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterStatus]);
+  }, [searchTerm, filterStatus, filterUnit]);
 
   const filteredOrders = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     return (ordersLocal || [])
       .filter(o => filterStatus === 'todos' || String(o.status) === filterStatus)
+      .filter(o => filterUnit === 'todas' || (o.setor || '').trim() === filterUnit)
       .filter(o =>
         term
           ? Object.values(o).some(v => String(v ?? '').toLowerCase().includes(term))
           : true
       );
-  }, [ordersLocal, searchTerm, filterStatus]);
+  }, [ordersLocal, searchTerm, filterStatus, filterUnit]);
 
   async function refreshOrdersTable() {
     setRefreshing(true);
@@ -76,6 +79,14 @@ const AllOrdersPage: React.FC = () => {
     },
   ];
 
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  const openDetails = (order: any) => {
+    setSelectedOrder(order);
+    setShowModal(true);
+  };
+
   if (isLoading) {
     return <div className="p-8 text-center text-gray-500">Carregando histórico de pedidos...</div>;
   }
@@ -96,6 +107,8 @@ const AllOrdersPage: React.FC = () => {
         onSearchChange={setSearchTerm}
         filterStatus={filterStatus}
         onFilterChange={setFilterStatus}
+        filterUnit={filterUnit}
+        onFilterUnitChange={setFilterUnit}
         currentPage={currentPage}
         onPageChange={setCurrentPage}
         totalPages={Math.ceil(filteredOrders.length / itemsPerPage)}
@@ -103,6 +116,13 @@ const AllOrdersPage: React.FC = () => {
         itemsPerPage={itemsPerPage}
         refreshing={refreshing}
         onRefresh={refreshOrdersTable}
+        onRowClick={openDetails}
+      />
+
+      <OrderDetailsModal
+        open={showModal}
+        order={selectedOrder}
+        onClose={() => setShowModal(false)}
       />
     </div>
   );

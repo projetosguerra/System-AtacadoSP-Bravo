@@ -3,19 +3,24 @@ import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown, RefreshCw } fro
 import { HistoricalOrder } from '../types';
 
 interface OrdersHistoryTableProps {
-  orders: HistoricalOrder[];       // deve vir a lista COMPLETA (sem slice)
+  orders: HistoricalOrder[];
   searchTerm: string;
   onSearchChange: (term: string) => void;
   filterStatus: string;
   onFilterChange: (status: string) => void;
-  currentPage: number;             // controlado pelo pai
-  totalPages: number;              // ignorado (calculamos localmente)
-  totalOrders: number;             // ignorado (calculamos localmente)
+  filterUnit: string;
+  onFilterUnitChange: (unit: string) => void;
+
+  currentPage: number;            
+  totalPages: number;              
+  totalOrders: number;             
   onPageChange: (page: number) => void;
   itemsPerPage: number;
   // novos
   onRefresh?: () => void;
   refreshing?: boolean;
+
+  onRowClick?: (order: HistoricalOrder) => void;
 }
 
 type SortKey = 'data' | 'id' | 'setor';
@@ -27,11 +32,14 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   onSearchChange,
   filterStatus,
   onFilterChange,
+  filterUnit,
+  onFilterUnitChange,
   currentPage,
   onPageChange,
   itemsPerPage,
   onRefresh,
-  refreshing
+  refreshing,
+  onRowClick
 }) => {
   const [sortKey, setSortKey] = useState<SortKey>('data');
   const [sortDir, setSortDir] = useState<SortDir>('desc'); // mais recente primeiro
@@ -53,6 +61,13 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '-';
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const formatTime = (dateString: string) => {
+    if (!dateString) return '-';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
   const getStatusBadge = (status: number) => {
@@ -85,11 +100,23 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
     return Array.from(map.values());
   }, [orders]);
 
+  const unitOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of uniqueOrders) {
+      if (o.setor && o.setor.trim()) set.add(o.setor.trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  }, [uniqueOrders]);
+
   const filteredOrders = useMemo(() => {
     const byStatus = (o: HistoricalOrder) => {
       if (filterStatus === 'todos') return true;
       const wanted = Number(filterStatus);
       return o.status === wanted;
+    };
+    const byUnit = (o: HistoricalOrder) => {
+      if (filterUnit === 'todas') return true;
+      return (o.setor || '').trim() === filterUnit;
     };
     const term = searchTerm.trim().toLowerCase();
     const bySearch = (o: HistoricalOrder) => {
@@ -103,8 +130,8 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
         String(o.valorTotal ?? '')
       ].some(v => String(v).toLowerCase().includes(term));
     };
-    return uniqueOrders.filter(o => byStatus(o) && bySearch(o));
-  }, [uniqueOrders, filterStatus, searchTerm]);
+    return uniqueOrders.filter(o => byStatus(o) && byUnit(o) && bySearch(o));
+  }, [uniqueOrders, filterStatus, filterUnit, searchTerm]);
 
   const sortedOrders = useMemo(() => {
     const arr = [...filteredOrders];
@@ -154,12 +181,10 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Histórico de Pedidos</h2>
 
         <div className="flex items-center gap-4">
-          {/* Busca */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -171,7 +196,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             />
           </div>
 
-          {/* Filtro de status */}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <select
@@ -187,7 +211,21 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             </select>
           </div>
 
-          {/* Ordenação */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-gray-400" />
+            <select
+              value={filterUnit}
+              onChange={(e) => onFilterUnitChange(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              title="Filtrar por Unidade Administrativa (Setor)"
+            >
+              <option value="todas">Todas as Unidades</option>
+              {unitOptions.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-2">
             <ArrowUpDown className="w-4 h-4 text-gray-400" />
             <select
@@ -209,7 +247,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             </select>
           </div>
 
-          {/* Atualizar */}
           {onRefresh && (
             <button
               onClick={onRefresh}
@@ -224,13 +261,13 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
         </div>
       </div>
 
-      {/* Tabela */}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">N/S</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horário</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uni. Adm.</th>
@@ -241,12 +278,22 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {pageOrders.map((order, index) => (
-              <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+              <tr
+                key={order.id}
+                className="hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => onRowClick?.(order)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') onRowClick?.(order); }}
+              >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {String(startItem + index).padStart(2, '0')}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {formatDate(order.data)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatTime(order.data)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.solicitante}</td>
@@ -262,7 +309,7 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             ))}
             {pageOrders.length === 0 && (
               <tr>
-                <td className="px-6 py-8 text-center text-gray-500" colSpan={8}>
+                <td className="px-6 py-8 text-center text-gray-500" colSpan={9}>
                   Nenhum pedido encontrado.
                 </td>
               </tr>
@@ -271,7 +318,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
         </table>
       </div>
 
-      {/* Rodapé de paginação */}
       <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
         <div className="text-sm text-gray-700">
           Mostrando {startItem}-{endItem} de {totalOrdersLocal} pedidos
@@ -291,7 +337,6 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {/* Botões numéricos de página */}
           {startBtn > 1 && (
             <>
               <button
