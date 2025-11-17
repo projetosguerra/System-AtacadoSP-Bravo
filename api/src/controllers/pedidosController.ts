@@ -82,7 +82,17 @@ export const listarHistorico = async (req: any, res: any) => {
     const days = cap(Number(req.query?.days ?? process.env.HIST_DAYS ?? 30), 7, 45);
     const maxrows = cap(Number(req.query?.maxrows ?? process.env.HIST_MAXROWS ?? 300), 50, 400);
 
+    const statusParam = String(req.query?.status ?? '').trim();
+    const parsed = statusParam
+      ? statusParam.split(',').map(s => Number(s)).filter(n => Number.isFinite(n))
+      : [1, 2, 3, 5]; 
+    const statuses = (parsed.length > 0 ? parsed : [1, 2, 3, 5])
+      .filter(n => n >= 0 && n <= 99);
+
     const pedidos = await withConnection(async (connection) => {
+      const bindNames = statuses.map((_, i) => `s${i}`);
+      const inClause = bindNames.map(n => `:${n}`).join(',');
+
       const sql = `
         SELECT * FROM (
           SELECT
@@ -96,15 +106,19 @@ export const listarHistorico = async (req: any, res: any) => {
           FROM BRAMV_PEDIDOC p
           LEFT JOIN BRAMV_USUARIOS u ON u.CODUSUARIO = p.CODUSUARIO
           LEFT JOIN BRAMV_SETOR s    ON s.CODSETOR    = u.CODSETOR
-          WHERE p.STATUS IN (1,2,3)
+          WHERE p.STATUS IN (${inClause})
             AND p.DATA >= TRUNC(SYSDATE) - :days
           ORDER BY p.DATA DESC
         )
         WHERE ROWNUM <= :maxrows
       `;
+
+      const binds: Record<string, any> = { days, maxrows };
+      statuses.forEach((val, i) => { binds[`s${i}`] = val; });
+
       const r = await connection.execute(
         sql,
-        { days, maxrows },
+        binds,
         { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 200 }
       );
 

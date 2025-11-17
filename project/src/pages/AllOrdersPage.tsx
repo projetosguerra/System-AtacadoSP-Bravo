@@ -4,45 +4,46 @@ import OrdersHistoryTable from '../components/OrdersHistoryTable';
 import { KpiData } from '../types';
 import { useData } from '../context/DataContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
+import { RefreshCw } from 'lucide-react';
+import FiltersButton from '../components/FiltersButton'; 
 
 const AllOrdersPage: React.FC = () => {
-  const { orders, isLoading } = useData();
+  const { orders, isLoading, setores } = useData(); 
 
   const [ordersLocal, setOrdersLocal] = useState(orders || []);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => setOrdersLocal(orders || []), [orders]);
 
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('todos');
-  const [filterUnit, setFilterUnit] = useState<string>('todas'); 
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 10;
+  const [days, setDays] = useState<number>(30);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterUnit]);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [selectedSetorId, setSelectedSetorId] = useState<string>('');
 
-  const filteredOrders = useMemo(() => {
-    const term = searchTerm.toLowerCase().trim();
-    return (ordersLocal || [])
-      .filter(o => filterStatus === 'todos' || String(o.status) === filterStatus)
-      .filter(o => filterUnit === 'todas' || (o.setor || '').trim() === filterUnit)
-      .filter(o =>
-        term
-          ? Object.values(o).some(v => String(v ?? '').toLowerCase().includes(term))
-          : true
-      );
-  }, [ordersLocal, searchTerm, filterStatus, filterUnit]);
+  const selectedUnitName = useMemo(() => {
+    if (!selectedSetorId) return '';
+    const s = (setores || []).find(
+      x => String(x.CODSETOR) === String(selectedSetorId)
+    );
+    return (s?.DESCRICAO || '').trim();
+  }, [selectedSetorId, setores]);
+
+  const pageDataset = useMemo(() => {
+    return (ordersLocal || []).filter(o =>
+      selectedUnitName ? (o.setor || '').trim() === selectedUnitName : true
+    );
+  }, [ordersLocal, selectedUnitName]);
 
   async function refreshOrdersTable() {
     setRefreshing(true);
     try {
-      const resp = await fetch('/api/pedidos/historico?days=45&maxrows=400', { headers: { 'Cache-Control': 'no-cache' } });
+      const resp = await fetch(`/api/pedidos/historico?days=${days}&maxrows=400`, {
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       if (!resp.ok) throw new Error('Falha ao atualizar histórico');
       const data = await resp.json();
       setOrdersLocal(Array.isArray(data) ? data : []);
-    } catch (e) {
+    } catch {
     } finally {
       setRefreshing(false);
     }
@@ -51,13 +52,13 @@ const AllOrdersPage: React.FC = () => {
   const kpiData: KpiData[] = [
     {
       title: 'Total de Pedidos',
-      value: filteredOrders.length,
-      subtitle: 'Todos os pedidos no histórico',
+      value: pageDataset.length,
+      subtitle: 'Após filtro de unidade (página)',
     },
     {
       title: 'Valor Aprovado',
       value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-        filteredOrders
+        pageDataset
           .filter(o => o.status === 1)
           .reduce((sum, o) => sum + (Number(o.valorTotal) || 0), 0)
       ),
@@ -66,26 +67,26 @@ const AllOrdersPage: React.FC = () => {
     {
       title: 'Taxa de Reprovação',
       value: `${
-        filteredOrders.length > 0
-          ? ((filteredOrders.filter(o => o.status === 2).length / filteredOrders.length) * 100).toFixed(1)
+        pageDataset.length > 0
+          ? ((pageDataset.filter(o => o.status === 2).length / pageDataset.length) * 100).toFixed(1)
           : 0
       }%`,
       subtitle: 'Percentual de pedidos rejeitados',
     },
     {
       title: 'Pedidos Pendentes',
-      value: filteredOrders.filter(o => o.status === 5).length,
+      value: pageDataset.filter(o => o.status === 5).length,
       subtitle: 'Aguardando análise',
     },
   ];
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const openDetails = (order: any) => { setSelectedOrder(order); setShowModal(true); };
 
-  const openDetails = (order: any) => {
-    setSelectedOrder(order);
-    setShowModal(true);
-  };
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 10;
+  useEffect(() => { setCurrentPage(1); }, [selectedSetorId]);
 
   if (isLoading) {
     return <div className="p-8 text-center text-gray-500">Carregando histórico de pedidos...</div>;
@@ -93,29 +94,60 @@ const AllOrdersPage: React.FC = () => {
 
   return (
     <div className="space-y-6 p-8 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold text-gray-800">Histórico de Pedidos</h1>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <h1 className="text-3xl font-bold text-gray-800">Histórico de Pedidos</h1>
 
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Período</label>
+            <select
+              className="border rounded px-2 py-2 text-sm"
+              value={String(days)}
+              onChange={(e) => setDays(Number(e.target.value))}
+              title="Janela de dias para atualizar histórico"
+            >
+              <option value="30">Últimos 30 dias (recomendado)</option>
+              <option value="45">Últimos 45 dias</option>
+            </select>
+          </div>
+
+          <button
+            onClick={refreshOrdersTable}
+            disabled={!!refreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            title="Atualizar histórico"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+
+          <FiltersButton
+            showFilters={showFilters}
+            setShowFilters={setShowFilters}
+            selectedSetorId={selectedSetorId}
+            setSelectedSetorId={setSelectedSetorId}
+            setores={(setores || []) as any}
+            disabled={!!refreshing}
+          />
+        </div>
+      </div>
+
+      {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {kpiData.map((kpi, index) => (
           <KpiCard key={index} data={kpi} />
         ))}
       </div>
 
+      {/* Tabela */}
       <OrdersHistoryTable
-        orders={filteredOrders}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        filterStatus={filterStatus}
-        onFilterChange={setFilterStatus}
-        filterUnit={filterUnit}
-        onFilterUnitChange={setFilterUnit}
+        orders={pageDataset}
         currentPage={currentPage}
         onPageChange={setCurrentPage}
-        totalPages={Math.ceil(filteredOrders.length / itemsPerPage)}
-        totalOrders={filteredOrders.length}
         itemsPerPage={itemsPerPage}
-        refreshing={refreshing}
         onRefresh={refreshOrdersTable}
+        refreshing={refreshing}
         onRowClick={openDetails}
       />
 

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { RefreshCw, SlidersHorizontal, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import PendingOrdersTable from '../components/PendingOrdersTable';
+import FiltersButton from '../components/FiltersButton';
 import { KpiData, PedidoPendente } from '../types';
 import { useData } from '../context/DataContext';
 
@@ -12,86 +12,20 @@ const ApprovalPanelPage = () => {
   const { pedidosPendentes: ctxPendentes, isLoading: ctxLoading, setores } = useData();
 
   const [days, setDays] = useState<number>(30);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [selectedSetorId, setSelectedSetorId] = useState<string>('');
+
+  const [loading, setLoading] = useState(false);
   const [list, setList] = useState<PedidoPendente[]>(ctxPendentes || []);
   const [error, setError] = useState<string | null>(null);
 
-  // Notice de acessibilidade (role=alert)
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [notice, setNotice] = useState<string | null>(null);
-  const alertRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const n = (location.state as any)?.notice;
-    if (n) {
-      setNotice(n);
-      // limpa o state da history para não reaparecer ao voltar
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.state, location.pathname, navigate]);
-  useEffect(() => {
-    if (notice && alertRef.current) {
-      alertRef.current.focus();
-      const t = setTimeout(() => setNotice(null), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [notice]);
-
-  const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [selectedSetorId, setSelectedSetorId] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState<string>('');
-
-  const getPedidoSetorId = (p: any): string => {
-    return String(
-      p?.codSetor ??
-      p?.CODSETOR ??
-      p?.codsetor ??
-      p?.setorId ??
-      p?.COD_SETOR ??
-      ''
-    );
-  };
-
-  const matchesSearch = (p: any, term: string) => {
-    if (!term) return true;
-    const t = term.toLowerCase();
-    try {
-      const fields = [
-        p?.id,
-        p?.solicitante ?? p?.SOLICITANTE,
-        p?.status ?? p?.STATUS,
-        p?.descricao ?? p?.DESCRICAO,
-        p?.numero ?? p?.NUMPEDRCA ?? p?.NUMPEDIDO,
-      ];
-      if (fields.some(v => String(v ?? '').toLowerCase().includes(t))) return true;
-      return JSON.stringify(p).toLowerCase().includes(t);
-    } catch {
-      return false;
-    }
-  };
-
-  const abortRef = useRef<AbortController | null>(null);
-  function cancelInFlight() {
-    try { abortRef.current?.abort(); } catch {}
-    abortRef.current = new AbortController();
-    return abortRef.current.signal;
-  }
-
-  async function loadPendentes(windowDays = days, totals = 0) {
+  async function loadPendentes(windowDays = days) {
     setLoading(true);
     setError(null);
     try {
-      const signal = cancelInFlight();
-      const params = new URLSearchParams({
-        days: String(windowDays),
-        maxrows: '200',
-        totals: String(totals),
-      });
-      if (selectedSetorId) params.set('codsetor', selectedSetorId);
-
+      const params = new URLSearchParams({ days: String(windowDays), maxrows: '200' });
       const resp = await fetch(`/api/pedidos/pendentes?${params.toString()}`, {
-        headers: { 'Cache-Control': 'no-cache' },
-        signal
+        headers: { 'Cache-Control': 'no-cache' }
       });
       if (!resp.ok) throw new Error('Falha ao buscar pedidos pendentes');
       const data = await resp.json();
@@ -101,7 +35,6 @@ const ApprovalPanelPage = () => {
       }
       setList(Array.from(map.values()));
     } catch (e: any) {
-      if (e?.name === 'AbortError') return;
       setError(e?.message || 'Erro ao carregar pendentes.');
       setList(ctxPendentes || []);
     } finally {
@@ -110,72 +43,38 @@ const ApprovalPanelPage = () => {
   }
 
   useEffect(() => {
-    setList(ctxPendentes || []);
-    loadPendentes(days, 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days, selectedSetorId]);
+    loadPendentes(days);
+  }, [days]); 
 
   const displayList = useMemo(() => {
-    let arr = list;
-    if (selectedSetorId) {
-      arr = arr.filter(p => getPedidoSetorId(p) === selectedSetorId);
-    }
-    if (searchTerm.trim()) {
-      arr = arr.filter(p => matchesSearch(p, searchTerm.trim()));
-    }
-    return arr;
-  }, [list, selectedSetorId, searchTerm]);
+    return (list || []).filter(p => {
+      if (!selectedSetorId) return true;
+      const setorId = String(
+        (p as any)?.codSetor ?? (p as any)?.CODSETOR ?? (p as any)?.codsetor ?? (p as any)?.setorId ?? (p as any)?.COD_SETOR ?? ''
+      );
+      return setorId === selectedSetorId;
+    });
+  }, [list, selectedSetorId]);
 
   const totalPedidos = displayList.length;
-  const totalValue = useMemo(
+  const totalValor = useMemo(
     () => displayList.reduce((sum, p) => sum + toNumber((p as any)?.valor), 0),
     [displayList]
   );
-  const newOrdersToday = useMemo(
+  const novosHoje = useMemo(
     () => displayList.filter(p => {
-      const d = new Date((p as any).data);
-      const t = new Date();
+      const d = new Date((p as any).data); const t = new Date();
       return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
     }).length,
     [displayList]
   );
 
-  const kpiData: KpiData[] = [
-    { title: 'Pedidos Pendentes', value: (loading || ctxLoading) ? '...' : totalPedidos, subtitle: 'Aguardando sua análise' },
-    { title: 'Valor Total Pendente', value: (loading || ctxLoading) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue), subtitle: 'Soma de todos os pedidos filtrados' },
-    { title: 'Pedidos Hoje', value: (loading || ctxLoading) ? '...' : newOrdersToday, subtitle: 'Recebidos nas últimas 24h' },
-    { title: 'Ticket Médio', value: (loading || ctxLoading || totalPedidos === 0) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue / totalPedidos), subtitle: 'Valor médio por pedido' },
-  ];
-
-  const isBusy = loading || ctxLoading;
-
-  const clearFilters = () => {
-    setSelectedSetorId('');
-    setSearchTerm('');
-  };
+  // Paginação da tabela
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [selectedSetorId, days]); 
 
   return (
-    <div className="space-y-4 p-8 bg-gray-50 min-h-full">
-      {/* Alerta acessível pós-ação */}
-      {notice && (
-        <div
-          ref={alertRef}
-          role="alert"
-          aria-live="assertive"
-          tabIndex={-1}
-          className="p-3 rounded-md border border-green-200 bg-green-50 text-green-800 flex items-start justify-between"
-        >
-          <span className="text-sm">{notice}</span>
-          <button
-            onClick={() => setNotice(null)}
-            className="text-green-700 hover:text-green-900 text-sm font-medium"
-            aria-label="Fechar alerta"
-          >
-            Fechar
-          </button>
-        </div>
-      )}
-
+    <div className="space-y-6 p-8 bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Painel de Aprovação</h1>
 
@@ -186,8 +85,7 @@ const ApprovalPanelPage = () => {
               className="border rounded px-2 py-2 text-sm"
               value={String(days)}
               onChange={(e) => setDays(Number(e.target.value))}
-              disabled={isBusy}
-              title="Janela de dias para buscar pendentes"
+              disabled={loading || ctxLoading}
             >
               <option value="30">Últimos 30 dias (recomendado)</option>
               <option value="45">Últimos 45 dias</option>
@@ -195,87 +93,52 @@ const ApprovalPanelPage = () => {
           </div>
 
           <button
-            onClick={() => loadPendentes(days, 1)}
-            disabled={isBusy}
+            onClick={() => loadPendentes(days)}
+            disabled={loading || ctxLoading}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-            title="Atualizar lista (tenta preencher totais)"
+            title="Atualizar lista"
           >
-            <RefreshCw className={`w-4 h-4 ${isBusy ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${(loading || ctxLoading) ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
 
-          <button
-            onClick={() => setShowFilters(v => !v)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            title="Mostrar/ocultar filtros"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-            Filtros
-          </button>
+          <FiltersButton
+            showFilters={showFilters}
+            setShowFilters={setShowFilters}
+            selectedSetorId={selectedSetorId}
+            setSelectedSetorId={setSelectedSetorId}
+            setores={(setores || []) as any}
+            disabled={loading || ctxLoading}
+          />
         </div>
       </div>
-
-      {showFilters && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-end gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Unidade Administrativa</label>
-              <select
-                className="w-full border rounded px-3 py-2"
-                value={selectedSetorId}
-                onChange={(e) => setSelectedSetorId(e.target.value)}
-                disabled={isBusy}
-              >
-                <option value="">Todas</option>
-                {(setores || []).map(s => (
-                  <option key={String(s.CODSETOR)} value={String(s.CODSETOR)}>
-                    {s.DESCRICAO}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
-              <input
-                type="text"
-                className="w-full border rounded px-3 py-2"
-                placeholder="Nº do pedido, solicitante, status..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                disabled={isBusy}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={clearFilters}
-                disabled={isBusy || (!selectedSetorId && !searchTerm)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                title="Limpar filtros"
-              >
-                <X className="inline w-4 h-4 mr-1" />
-                Limpar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {kpiData.map((kpi, index) => <KpiCard key={index} data={kpi} />)}
+        {[
+          { title: 'Pedidos Pendentes', value: (loading || ctxLoading) ? '...' : totalPedidos, subtitle: 'Aguardando sua análise' },
+          { title: 'Valor Total Pendente', value: (loading || ctxLoading) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor), subtitle: 'Soma (após filtro de unidade)' },
+          { title: 'Pedidos Hoje', value: (loading || ctxLoading) ? '...' : novosHoje, subtitle: 'Recebidos nas últimas 24h' },
+          { title: 'Ticket Médio', value: (loading || ctxLoading || totalPedidos === 0) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor / totalPedidos), subtitle: 'Média por pedido' },
+        ].map((k, i) => <KpiCard key={i} data={k as KpiData} />)}
       </div>
 
-      {(!isBusy && error) && (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        {(loading || ctxLoading) && <div className="p-8 text-center text-gray-600">Carregando pedidos...</div>}
+        {!(loading || ctxLoading) && (
+          <PendingOrdersTable
+            pedidos={displayList}
+            currentPage={page}
+            itemsPerPage={10}
+            onPageChange={setPage}
+          />
+        )}
+      </div>
+
+      {error && !loading && !ctxLoading && (
         <div className="p-3 rounded border border-red-300 bg-red-50 text-sm text-red-700">
           {error}
         </div>
       )}
-
-      <div className="bg-white rounded-lg shadow-md border border-gray-200">
-        {isBusy && <div className="p-8 text-center text-gray-600">Carregando pedidos...</div>}
-        {!isBusy && <PendingOrdersTable pedidos={displayList} />}
-      </div>
     </div>
   );
 };

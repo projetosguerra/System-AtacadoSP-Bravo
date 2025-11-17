@@ -1,25 +1,21 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown, RefreshCw } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 import { HistoricalOrder } from '../types';
 
 interface OrdersHistoryTableProps {
   orders: HistoricalOrder[];
-  searchTerm: string;
-  onSearchChange: (term: string) => void;
-  filterStatus: string;
-  onFilterChange: (status: string) => void;
-  filterUnit: string;
-  onFilterUnitChange: (unit: string) => void;
+  searchTerm?: string;
+  filterStatus?: string;
+  filterUnit?: string;
 
-  currentPage: number;            
-  totalPages: number;              
-  totalOrders: number;             
+  currentPage: number;
+  totalPages?: number; 
+  totalOrders?: number; 
   onPageChange: (page: number) => void;
   itemsPerPage: number;
-  // novos
+
   onRefresh?: () => void;
   refreshing?: boolean;
-
   onRowClick?: (order: HistoricalOrder) => void;
 }
 
@@ -28,21 +24,23 @@ type SortDir = 'asc' | 'desc';
 
 const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   orders,
-  searchTerm,
-  onSearchChange,
-  filterStatus,
-  onFilterChange,
-  filterUnit,
-  onFilterUnitChange,
+  searchTerm = '',
+  filterStatus = 'todos',
+  filterUnit = 'todas',
   currentPage,
   onPageChange,
   itemsPerPage,
-  onRefresh,
-  refreshing,
   onRowClick
 }) => {
   const [sortKey, setSortKey] = useState<SortKey>('data');
-  const [sortDir, setSortDir] = useState<SortDir>('desc'); // mais recente primeiro
+  const [sortDir, setSortDir] = useState<SortDir>('desc'); 
+  const [localSearch, setLocalSearch] = useState(searchTerm);
+  const [localStatus, setLocalStatus] = useState(filterStatus);
+  const [localUnit, setLocalUnit] = useState(filterUnit);
+
+  useEffect(() => {
+    onPageChange(1);
+  }, [localSearch, localStatus, localUnit, sortKey, sortDir, orders.length]); 
 
   const statusMap = {
     1: { text: 'Aprovado', color: 'green' },
@@ -110,15 +108,15 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
 
   const filteredOrders = useMemo(() => {
     const byStatus = (o: HistoricalOrder) => {
-      if (filterStatus === 'todos') return true;
-      const wanted = Number(filterStatus);
+      if (localStatus === 'todos') return true;
+      const wanted = Number(localStatus);
       return o.status === wanted;
     };
     const byUnit = (o: HistoricalOrder) => {
-      if (filterUnit === 'todas') return true;
-      return (o.setor || '').trim() === filterUnit;
+      if (localUnit === 'todas') return true;
+      return (o.setor || '').trim() === localUnit;
     };
-    const term = searchTerm.trim().toLowerCase();
+    const term = localSearch.trim().toLowerCase();
     const bySearch = (o: HistoricalOrder) => {
       if (!term) return true;
       return [
@@ -131,7 +129,7 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
       ].some(v => String(v).toLowerCase().includes(term));
     };
     return uniqueOrders.filter(o => byStatus(o) && byUnit(o) && bySearch(o));
-  }, [uniqueOrders, filterStatus, filterUnit, searchTerm]);
+  }, [uniqueOrders, localStatus, localUnit, localSearch]);
 
   const sortedOrders = useMemo(() => {
     const arr = [...filteredOrders];
@@ -181,26 +179,28 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Histórico de Pedidos</h2>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Busca */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
               placeholder="Procurar"
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm w-64"
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
             />
           </div>
 
+          {/* Filtro de status */}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <select
-              value={filterStatus}
-              onChange={(e) => onFilterChange(e.target.value)}
+              value={localStatus}
+              onChange={(e) => setLocalStatus(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="todos">Todos</option>
@@ -211,11 +211,12 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             </select>
           </div>
 
+          {/* Filtro por Unidade Adm. (setor) */}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <select
-              value={filterUnit}
-              onChange={(e) => onFilterUnitChange(e.target.value)}
+              value={localUnit}
+              onChange={(e) => setLocalUnit(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               title="Filtrar por Unidade Administrativa (Setor)"
             >
@@ -226,6 +227,7 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             </select>
           </div>
 
+          {/* Ordenação */}
           <div className="flex items-center gap-2">
             <ArrowUpDown className="w-4 h-4 text-gray-400" />
             <select
@@ -247,20 +249,10 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             </select>
           </div>
 
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={!!refreshing}
-              className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              title="Atualizar apenas a tabela"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Atualizar
-            </button>
-          )}
         </div>
       </div>
 
+      {/* Tabela */}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -318,6 +310,7 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
         </table>
       </div>
 
+      {/* Rodapé de paginação */}
       <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
         <div className="text-sm text-gray-700">
           Mostrando {startItem}-{endItem} de {totalOrdersLocal} pedidos

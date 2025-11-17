@@ -326,7 +326,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                                         {user.setor && (
                                             <div className="flex items-center p-3 bg-gray-50 rounded-lg">
                                                 <div>
-                                                    <p className="text-sm text-gray-500">Setor</p>
+                                                    <p className="text-sm text-gray-500">Setor (Unidade Administrativa)</p>
                                                     <p className="font-medium text-gray-900">{user.setor}</p>
                                                 </div>
                                             </div>
@@ -483,7 +483,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                                         {/* Campo de Setor - Obrigatório para todos os tipos */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Setor (Secretaria) <span className="text-red-500">*</span>
+                                                Setor (Unidade Administrativa) <span className="text-red-500">*</span>
                                             </label>
                                             <select
                                                 value={codsetor}

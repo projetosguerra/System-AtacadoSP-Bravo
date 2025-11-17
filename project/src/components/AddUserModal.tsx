@@ -79,7 +79,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
           email,
           senha,
           tipoUsuario: tipousuario,
-          codSetor: codsetor, // agora obrigatório para 1,2,3
+          codSetor: codsetor, 
           genero,
           telefone,
           idFuncionario
@@ -257,10 +257,9 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                     </select>
                   </div>
 
-                  {/* Setor — AGORA EXIBIDO PARA TODOS (1, 2, 3) */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Setor (Secretaria) <span className="text-red-500">*</span>
+                      Setor (Unidade Administrativa) <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={codsetor}
