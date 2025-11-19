@@ -354,3 +354,24 @@ export const aprovarPedido = async (req: any, res: any) => {
     });
   }
 };
+
+export const desbloquearPedido = async (req: any, res: any) => {
+  const { id } = req.params;
+  try {
+    const result = await withConnection(async (connection) => {
+      const up = await connection.execute(
+        `UPDATE BRAMV_PEDIDOC
+            SET STATUS = 5
+          WHERE NUMPEDRCA = :id
+            AND STATUS = 3`,
+        { id: Number(id) }
+      );
+      await connection.commit();
+      return up.rowsAffected ?? 0;
+    });
+    return res.json({ success: true, reverted: result });
+  } catch (err: any) {
+    console.error('[API] ERRO ao desbloquear pedido:', err);
+    return res.status(500).json({ error: err?.message || 'Falha ao desbloquear pedido.' });
+  }
+};

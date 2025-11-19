@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import PendingOrdersTable from '../components/PendingOrdersTable';
@@ -10,6 +11,7 @@ const toNumber = (x: any) => Number.isFinite(Number(x)) ? Number(x) : 0;
 
 const ApprovalPanelPage = () => {
   const { pedidosPendentes: ctxPendentes, isLoading: ctxLoading, setores } = useData();
+  const location = useLocation();
 
   const [days, setDays] = useState<number>(30);
   const [showFilters, setShowFilters] = useState<boolean>(false);
@@ -44,7 +46,30 @@ const ApprovalPanelPage = () => {
 
   useEffect(() => {
     loadPendentes(days);
-  }, [days]); 
+  }, [days]);
+
+  // Refetch quando a página ganha foco/visibilidade (resolve race com unlock)
+  useEffect(() => {
+    const onFocus = () => loadPendentes(days);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') loadPendentes(days);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [days]);
+
+  // Refetch extra se navegação trouxe sinal de forceRefresh
+  useEffect(() => {
+    if ((location.state as any)?.forceRefresh) {
+      // pequena espera para garantir commit do unlock
+      const t = setTimeout(() => loadPendentes(days), 200);
+      return () => clearTimeout(t);
+    }
+  }, [location.state, days]);
 
   const displayList = useMemo(() => {
     return (list || []).filter(p => {
@@ -69,9 +94,8 @@ const ApprovalPanelPage = () => {
     [displayList]
   );
 
-  // Paginação da tabela
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [selectedSetorId, days]); 
+  useEffect(() => { setPage(1); }, [selectedSetorId, days]);
 
   return (
     <div className="space-y-6 p-8 bg-gray-50 min-h-screen">

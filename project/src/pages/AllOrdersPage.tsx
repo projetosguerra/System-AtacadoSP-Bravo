@@ -3,64 +3,51 @@ import KpiCard from '../components/KpiCard';
 import OrdersHistoryTable from '../components/OrdersHistoryTable';
 import { KpiData } from '../types';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import { RefreshCw } from 'lucide-react';
-import FiltersButton from '../components/FiltersButton'; 
 
 const AllOrdersPage: React.FC = () => {
-  const { orders, isLoading, setores } = useData(); 
+  const { orders, isLoading, setores } = useData() as any;
+  const { user } = useAuth();
 
   const [ordersLocal, setOrdersLocal] = useState(orders || []);
   const [refreshing, setRefreshing] = useState(false);
-
   useEffect(() => setOrdersLocal(orders || []), [orders]);
 
   const [days, setDays] = useState<number>(30);
 
-  const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [selectedSetorId, setSelectedSetorId] = useState<string>('');
-
-  const selectedUnitName = useMemo(() => {
-    if (!selectedSetorId) return '';
-    const s = (setores || []).find(
-      x => String(x.CODSETOR) === String(selectedSetorId)
-    );
-    return (s?.DESCRICAO || '').trim();
-  }, [selectedSetorId, setores]);
+  const userUnitName = useMemo(() => {
+    const direct = String(user?.setor ?? '').trim();
+    if (direct) return direct;
+    const byCode = (setores || []).find((s: any) => Number(s.CODSETOR) === Number(user?.codSetor));
+    return String(byCode?.DESCRICAO ?? '').trim();
+  }, [user?.setor, user?.codSetor, setores]);
 
   const pageDataset = useMemo(() => {
-    return (ordersLocal || []).filter(o =>
-      selectedUnitName ? (o.setor || '').trim() === selectedUnitName : true
-    );
-  }, [ordersLocal, selectedUnitName]);
+    if (!userUnitName) return ordersLocal || []; // fallback: sem nome, não filtra
+    return (ordersLocal || []).filter((o: { setor?: string }) => String(o.setor ?? '').trim() === userUnitName);
+  }, [ordersLocal, userUnitName]);
 
   async function refreshOrdersTable() {
     setRefreshing(true);
     try {
-      const resp = await fetch(`/api/pedidos/historico?days=${days}&maxrows=400`, {
-        headers: { 'Cache-Control': 'no-cache' }
-      });
+      const url = `/api/pedidos/historico?days=${days}&maxrows=400`;
+      const resp = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } });
       if (!resp.ok) throw new Error('Falha ao atualizar histórico');
       const data = await resp.json();
       setOrdersLocal(Array.isArray(data) ? data : []);
-    } catch {
     } finally {
       setRefreshing(false);
     }
   }
 
   const kpiData: KpiData[] = [
-    {
-      title: 'Total de Pedidos',
-      value: pageDataset.length,
-      subtitle: 'Após filtro de unidade (página)',
-    },
+    { title: 'Total de Pedidos', value: pageDataset.length, subtitle: userUnitName ? `Unidade: ${userUnitName}` : 'Sua unidade' },
     {
       title: 'Valor Aprovado',
       value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-        pageDataset
-          .filter(o => o.status === 1)
-          .reduce((sum, o) => sum + (Number(o.valorTotal) || 0), 0)
+        pageDataset.filter((o: any) => o.status === 1).reduce((sum: number, o: any) => sum + (Number(o.valorTotal) || 0), 0)
       ),
       subtitle: 'Soma dos pedidos aprovados',
     },
@@ -68,16 +55,12 @@ const AllOrdersPage: React.FC = () => {
       title: 'Taxa de Reprovação',
       value: `${
         pageDataset.length > 0
-          ? ((pageDataset.filter(o => o.status === 2).length / pageDataset.length) * 100).toFixed(1)
+          ? ((pageDataset.filter((o: any) => o.status === 2).length / pageDataset.length) * 100).toFixed(1)
           : 0
       }%`,
-      subtitle: 'Percentual de pedidos rejeitados',
+      subtitle: 'Pedidos reprovados / total',
     },
-    {
-      title: 'Pedidos Pendentes',
-      value: pageDataset.filter(o => o.status === 5).length,
-      subtitle: 'Aguardando análise',
-    },
+    { title: 'Pedidos Pendentes', value: pageDataset.filter((o: any) => o.status === 5).length, subtitle: 'Aguardando análise' },
   ];
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
@@ -86,17 +69,22 @@ const AllOrdersPage: React.FC = () => {
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
-  useEffect(() => { setCurrentPage(1); }, [selectedSetorId]);
+  useEffect(() => { setCurrentPage(1); }, [userUnitName]);
 
-  if (isLoading) {
-    return <div className="p-8 text-center text-gray-500">Carregando histórico de pedidos...</div>;
-  }
+  if (isLoading) return <div className="p-8 text-center text-gray-500">Carregando histórico de pedidos...</div>;
 
   return (
     <div className="space-y-6 p-8 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <h1 className="text-3xl font-bold text-gray-800">Histórico de Pedidos</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-gray-800">Histórico de Pedidos</h1>
+          {userUnitName && (
+            <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+              Escopo: {userUnitName}
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -121,23 +109,12 @@ const AllOrdersPage: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
-
-          <FiltersButton
-            showFilters={showFilters}
-            setShowFilters={setShowFilters}
-            selectedSetorId={selectedSetorId}
-            setSelectedSetorId={setSelectedSetorId}
-            setores={(setores || []) as any}
-            disabled={!!refreshing}
-          />
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {kpiData.map((kpi, index) => (
-          <KpiCard key={index} data={kpi} />
-        ))}
+        {kpiData.map((kpi, index) => (<KpiCard key={index} data={kpi} />))}
       </div>
 
       {/* Tabela */}
@@ -146,16 +123,11 @@ const AllOrdersPage: React.FC = () => {
         currentPage={currentPage}
         onPageChange={setCurrentPage}
         itemsPerPage={itemsPerPage}
-        onRefresh={refreshOrdersTable}
-        refreshing={refreshing}
         onRowClick={openDetails}
+        showUnitFilter={false}
       />
 
-      <OrderDetailsModal
-        open={showModal}
-        order={selectedOrder}
-        onClose={() => setShowModal(false)}
-      />
+      <OrderDetailsModal open={showModal} order={selectedOrder} onClose={() => setShowModal(false)} />
     </div>
   );
 };

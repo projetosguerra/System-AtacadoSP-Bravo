@@ -1,3 +1,5 @@
+export type UserRoleConst = 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
+
 export interface User {
   codUsuario: number;
   primeiroNome: string;
@@ -6,10 +8,13 @@ export interface User {
   genero: string | null;
   numeroTelefone: string | null;
   idFuncionario: string | null;
-  tipoUsuario: number; 
-  perfil: 'Admin' | 'Aprovador' | 'Solicitante'; 
+
+  tipoUsuario: number;
+
+  perfil: 'Admin' | 'Aprovador' | 'Solicitante';
+
   codSetor: number | null;
-  setor: string;
+  setor: string; 
 }
 
 export interface Setor {
@@ -25,25 +30,6 @@ export interface KpiData {
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
 }
-
-/*export interface UnitFinancials {
-  id: string;
-  nome: string;
-  limiteTotal: number;
-  saldoDisponivel: number;
-  valorGasto: number;
-  historico: {
-    data: string;
-    valorAnterior: number;
-    novoValor: number;
-    alteradoPor: string;
-  }[];
-  gastosPorSetor: {
-    CODSETOR: number;
-    DESCRICAO: string;
-    GASTO_TOTAL: number;
-  }[];
-}*/
 
 export interface FinancialData {
   gastosPorSetor: {
@@ -67,11 +53,11 @@ export interface CartItem extends Product {
 }
 
 export interface PedidoPendente {
-  status(status: any): unknown;
   id: number;
   data: string;
+  status: number;
   solicitante: string;
-  unidadeAdmin: string;
+  unidadeAdmin: string;    
   qtdItens: number;
   valor: number;
 }
@@ -100,4 +86,6 @@ export interface HistoricalOrder {
   setor: string;
   qtdItens: number;
   valorTotal: number;
+  concatRole?: 'RESULTADO' | 'ORIGEM' | null;
+  concatGroupId?: number | null;
 }
