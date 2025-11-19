@@ -23,6 +23,36 @@ function mapConcatRole(papel?: string | null): 'RESULT' | 'SOURCE' | null {
   return null;
 }
 
+// Normaliza usuário de middleware variados
+function readUserScope(u: any): { perfil: 'ADMIN'|'APROVADOR'|'SOLICITANTE'; codSetor?: number; codUsuario?: number } {
+  const rawPerfil =
+    u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
+  const perfilUp = String(rawPerfil).trim().toUpperCase();
+
+  // Também aceitar tipo numérico se existir (1=ADMIN, 2=APROVADOR, 3=SOLICITANTE)
+  const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? NaN);
+  let perfil: 'ADMIN'|'APROVADOR'|'SOLICITANTE';
+  if (['ADMIN','APROVADOR','SOLICITANTE'].includes(perfilUp)) {
+    perfil = perfilUp as any;
+  } else if (Number.isFinite(tipoNum)) {
+    perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
+  } else {
+    // fallback conservador: tratar como aprovador (mais restritivo)
+    perfil = 'APROVADOR';
+  }
+
+  const codSetor = Number(
+    u?.codSetor ?? u?.codsetor ?? u?.CODSETOR ?? u?.setorId ?? u?.COD_SETOR
+  );
+  const codUsuario = Number(u?.codUsuario ?? u?.CODUSUARIO ?? u?.userId);
+
+  return {
+    perfil,
+    ...(Number.isFinite(codSetor) ? { codSetor } : {}),
+    ...(Number.isFinite(codUsuario) ? { codUsuario } : {})
+  };
+}
+
 export const listarPendentes = async (req: any, res: any) => {
   if (inflightPendentes >= PENDENTES_INFLIGHT_THRESHOLD) {
     res.set('Retry-After', '2');
@@ -34,20 +64,20 @@ export const listarPendentes = async (req: any, res: any) => {
     const days = cap(Number(req.query?.days ?? process.env.PENDENTES_DAYS ?? 30), 7, 45);
     const maxrows = cap(Number(req.query?.maxrows ?? process.env.PENDENTES_MAXROWS ?? 200), 10, 200);
 
-    const perfil = req.user?.perfil;
-    const userSetor = req.user?.codSetor;
-    const restrictSetor = perfil === 'SOLICITANTE' && Number.isFinite(Number(userSetor));
+    const { perfil, codSetor } = readUserScope(req.user || {});
+    const isAdmin = perfil === 'ADMIN';
+    const restrictSetor = !isAdmin && Number.isFinite(codSetor as any);
 
     const pedidos = await withConnection(async (connection) => {
       const sql = `
         SELECT * FROM (
           SELECT
-            p.NUMPEDRCA                                         AS ID,
-            p.DATA                                              AS DATA,
-            (u.PRIMEIRO_NOME || ' ' || NVL(u.ULTIMO_NOME,''))   AS SOLICITANTE,
-            s.DESCRICAO                                         AS SETOR,
-            NVL(p.QTD_ITENS, 0)                                 AS QTD_ITENS,
-            NVL(p.VALOR_TOTAL, 0)                               AS VALOR_TOTAL
+            p.NUMPEDRCA                                       AS ID,
+            p.DATA                                            AS DATA,
+            (u.PRIMEIRO_NOME || ' ' || NVL(u.ULTIMO_NOME,'')) AS SOLICITANTE,
+            s.DESCRICAO                                       AS SETOR,
+            NVL(p.QTD_ITENS, 0)                               AS QTD_ITENS,
+            NVL(p.VALOR_TOTAL, 0)                             AS VALOR_TOTAL
           FROM BRAMV_PEDIDOC p
           LEFT JOIN BRAMV_USUARIOS u ON u.CODUSUARIO = p.CODUSUARIO
           LEFT JOIN BRAMV_SETOR s    ON s.CODSETOR    = u.CODSETOR
@@ -60,7 +90,7 @@ export const listarPendentes = async (req: any, res: any) => {
         WHERE ROWNUM <= :maxrows
       `;
       const binds: Record<string, any> = { days, maxrows };
-      if (restrictSetor) binds.userSetor = userSetor;
+      if (restrictSetor) binds.userSetor = codSetor;
 
       const r = await connection.execute(
         sql,
@@ -106,12 +136,11 @@ export const listarHistorico = async (req: any, res: any) => {
 
     const includeOrigens = String(req.query?.includeOrigens ?? '').toLowerCase() === 'true';
 
-    const perfil = req.user?.perfil;
-    const userSetor = req.user?.codSetor;
-    const userId = req.user?.codUsuario;
+    const { perfil, codSetor, codUsuario } = readUserScope(req.user || {});
+    const isAdmin = perfil === 'ADMIN';
     const meus = String(req.query?.meus ?? '').toLowerCase() === 'true';
-    const restrictSetor = perfil === 'SOLICITANTE' && Number.isFinite(Number(userSetor));
-    const restrictUsuario = restrictSetor && meus && Number.isFinite(Number(userId));
+    const restrictSetor = !isAdmin && Number.isFinite(codSetor as any);
+    const restrictUsuario = restrictSetor && perfil === 'SOLICITANTE' && meus && Number.isFinite(codUsuario as any);
 
     const bindNames = statuses.map((_, i) => `s${i}`);
     const inClause = bindNames.map(n => `:${n}`).join(',');
@@ -119,15 +148,15 @@ export const listarHistorico = async (req: any, res: any) => {
     const sql = `
       SELECT * FROM (
         SELECT
-          p.NUMPEDRCA                                         AS ID,
-          p.DATA                                              AS DATA,
-          p.STATUS                                            AS STATUS,
-          (u.PRIMEIRO_NOME || ' ' || NVL(u.ULTIMO_NOME,''))   AS SOLICITANTE,
-          s.DESCRICAO                                         AS SETOR,
-          NVL(p.QTD_ITENS, 0)                                 AS QTD_ITENS,
-          NVL(p.VALOR_TOTAL, 0)                               AS VALOR_TOTAL,
-          p.CONCAT_PAPEL                                      AS CONCAT_PAPEL,
-          p.CONCAT_GRUPO_ID                                   AS CONCAT_GRUPO_ID
+          p.NUMPEDRCA                                       AS ID,
+          p.DATA                                            AS DATA,
+          p.STATUS                                          AS STATUS,
+          (u.PRIMEIRO_NOME || ' ' || NVL(u.ULTIMO_NOME,'')) AS SOLICITANTE,
+          s.DESCRICAO                                       AS SETOR,
+          NVL(p.QTD_ITENS, 0)                               AS QTD_ITENS,
+          NVL(p.VALOR_TOTAL, 0)                             AS VALOR_TOTAL,
+          p.CONCAT_PAPEL                                    AS CONCAT_PAPEL,
+          p.CONCAT_GRUPO_ID                                 AS CONCAT_GRUPO_ID
         FROM BRAMV_PEDIDOC p
         LEFT JOIN BRAMV_USUARIOS u ON u.CODUSUARIO = p.CODUSUARIO
         LEFT JOIN BRAMV_SETOR s    ON s.CODSETOR    = u.CODSETOR
@@ -143,8 +172,8 @@ export const listarHistorico = async (req: any, res: any) => {
 
     const binds: Record<string, any> = { days, maxrows };
     statuses.forEach((val, i) => { binds[`s${i}`] = val; });
-    if (restrictSetor) binds.userSetor = userSetor;
-    if (restrictUsuario) binds.userId = userId;
+    if (restrictSetor) binds.userSetor = codSetor;
+    if (restrictUsuario) binds.userId = codUsuario;
 
     const r = await withConnection(conn =>
       conn.execute(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 200 })

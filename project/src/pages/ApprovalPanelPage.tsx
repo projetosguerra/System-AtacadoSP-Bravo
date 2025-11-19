@@ -6,12 +6,24 @@ import PendingOrdersTable from '../components/PendingOrdersTable';
 import FiltersButton from '../components/FiltersButton';
 import { KpiData, PedidoPendente } from '../types';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 
-const toNumber = (x: any) => Number.isFinite(Number(x)) ? Number(x) : 0;
+const toNumber = (x: any) => (Number.isFinite(Number(x)) ? Number(x) : 0);
 
 const ApprovalPanelPage = () => {
   const { pedidosPendentes: ctxPendentes, isLoading: ctxLoading, setores } = useData();
+  const { user, token } = useAuth();
   const location = useLocation();
+
+  const isAdmin = String(user?.perfil ?? '').toUpperCase() === 'ADMIN';
+
+  // Nome da unidade do usuário para fallback local (aprovador/solicitante)
+  const userUnitName = useMemo(() => {
+    const direct = String(user?.setor ?? '').trim();
+    if (direct) return direct;
+    const byCode = (setores || []).find((s: any) => Number(s.CODSETOR) === Number(user?.codSetor));
+    return String(byCode?.DESCRICAO ?? '').trim();
+  }, [user?.setor, user?.codSetor, setores]);
 
   const [days, setDays] = useState<number>(30);
   const [showFilters, setShowFilters] = useState<boolean>(false);
@@ -26,9 +38,9 @@ const ApprovalPanelPage = () => {
     setError(null);
     try {
       const params = new URLSearchParams({ days: String(windowDays), maxrows: '200' });
-      const resp = await fetch(`/api/pedidos/pendentes?${params.toString()}`, {
-        headers: { 'Cache-Control': 'no-cache' }
-      });
+      const headers: Record<string, string> = { 'Cache-Control': 'no-cache' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const resp = await fetch(`/api/pedidos/pendentes?${params.toString()}`, { headers });
       if (!resp.ok) throw new Error('Falha ao buscar pedidos pendentes');
       const data = await resp.json();
       const map = new Map<string | number, PedidoPendente>();
@@ -44,63 +56,59 @@ const ApprovalPanelPage = () => {
     }
   }
 
-  useEffect(() => {
-    loadPendentes(days);
-  }, [days]);
+  useEffect(() => { loadPendentes(days); }, [days]); // eslint-disable-line
 
-  // Refetch quando a página ganha foco/visibilidade (resolve race com unlock)
   useEffect(() => {
     const onFocus = () => loadPendentes(days);
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') loadPendentes(days);
-    };
+    const onVisibility = () => { if (document.visibilityState === 'visible') loadPendentes(days); };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [days]);
+  }, [days]); // eslint-disable-line
 
-  // Refetch extra se navegação trouxe sinal de forceRefresh
   useEffect(() => {
     if ((location.state as any)?.forceRefresh) {
-      // pequena espera para garantir commit do unlock
       const t = setTimeout(() => loadPendentes(days), 200);
       return () => clearTimeout(t);
     }
-  }, [location.state, days]);
+  }, [location.state, days]); // eslint-disable-line
 
-  const displayList = useMemo(() => {
-    return (list || []).filter(p => {
-      if (!selectedSetorId) return true;
-      const setorId = String(
-        (p as any)?.codSetor ?? (p as any)?.CODSETOR ?? (p as any)?.codsetor ?? (p as any)?.setorId ?? (p as any)?.COD_SETOR ?? ''
-      );
-      return setorId === selectedSetorId;
-    });
-  }, [list, selectedSetorId]);
+  // Escopo para ADMIN (filtro global de unidade) OU fallback para não-admin (filtrar por unidade do usuário)
+  const scopedList = useMemo(() => {
+    if (isAdmin) {
+      if (!selectedSetorId) return list || [];
+      const setorLabel = (o: any) => String(o?.unidadeAdmin || '').trim();
+      return (list || []).filter(p => setorLabel(p) === selectedSetorId);
+    }
+    // Não-admin: defesa em profundidade (mesmo se backend falhar)
+    if (!userUnitName) return list || [];
+    return (list || []).filter(p => String((p as any)?.unidadeAdmin || '').trim() === userUnitName);
+  }, [list, isAdmin, selectedSetorId, userUnitName]);
 
-  const totalPedidos = displayList.length;
+  const totalPedidos = scopedList.length;
   const totalValor = useMemo(
-    () => displayList.reduce((sum, p) => sum + toNumber((p as any)?.valor), 0),
-    [displayList]
+    () => scopedList.reduce((sum, p) => sum + toNumber((p as any)?.valor), 0),
+    [scopedList]
   );
-  const novosHoje = useMemo(
-    () => displayList.filter(p => {
+  const novosHoje = useMemo(() => {
+    return scopedList.filter(p => {
       const d = new Date((p as any).data); const t = new Date();
       return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
-    }).length,
-    [displayList]
-  );
+    }).length;
+  }, [scopedList]);
 
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [selectedSetorId, days]);
+  useEffect(() => { setPage(1); }, [selectedSetorId, days, userUnitName, isAdmin]);
 
   return (
     <div className="space-y-6 p-8 bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <h1 className="text-3xl font-bold text-gray-800">Painel de Aprovação</h1>
+        <h1 className="text-3xl font-bold text-gray-800">
+          {isAdmin ? 'Painel de Aprovação' : 'Meus Pedidos Pendentes'}
+        </h1>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -126,22 +134,24 @@ const ApprovalPanelPage = () => {
             Atualizar
           </button>
 
-          <FiltersButton
-            showFilters={showFilters}
-            setShowFilters={setShowFilters}
-            selectedSetorId={selectedSetorId}
-            setSelectedSetorId={setSelectedSetorId}
-            setores={(setores || []) as any}
-            disabled={loading || ctxLoading}
-          />
+          {isAdmin && (
+            <FiltersButton
+              showFilters={showFilters}
+              setShowFilters={setShowFilters}
+              selectedSetorId={selectedSetorId}
+              setSelectedSetorId={setSelectedSetorId}
+              setores={(setores || []) as any}
+              disabled={loading || ctxLoading}
+            />
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { title: 'Pedidos Pendentes', value: (loading || ctxLoading) ? '...' : totalPedidos, subtitle: 'Aguardando sua análise' },
-          { title: 'Valor Total Pendente', value: (loading || ctxLoading) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor), subtitle: 'Soma (após filtro de unidade)' },
-          { title: 'Pedidos Hoje', value: (loading || ctxLoading) ? '...' : novosHoje, subtitle: 'Recebidos nas últimas 24h' },
+          { title: 'Pedidos Pendentes', value: (loading || ctxLoading) ? '...' : totalPedidos, subtitle: isAdmin ? 'Global (com filtro opcional)' : 'Da sua unidade' },
+          { title: 'Valor Total Pendente', value: (loading || ctxLoading) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor), subtitle: 'Soma' },
+          { title: 'Pedidos Hoje', value: (loading || ctxLoading) ? '...' : novosHoje, subtitle: 'Últimas 24h' },
           { title: 'Ticket Médio', value: (loading || ctxLoading || totalPedidos === 0) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor / totalPedidos), subtitle: 'Média por pedido' },
         ].map((k, i) => <KpiCard key={i} data={k as KpiData} />)}
       </div>
@@ -150,10 +160,11 @@ const ApprovalPanelPage = () => {
         {(loading || ctxLoading) && <div className="p-8 text-center text-gray-600">Carregando pedidos...</div>}
         {!(loading || ctxLoading) && (
           <PendingOrdersTable
-            pedidos={displayList}
+            pedidos={scopedList}
             currentPage={page}
             itemsPerPage={10}
             onPageChange={setPage}
+            showUnitFilter={isAdmin} 
           />
         )}
       </div>

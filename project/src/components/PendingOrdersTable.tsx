@@ -9,6 +9,7 @@ interface PendingOrdersTableProps {
   itemsPerPage: number;
   onPageChange: (page: number) => void;
   onApprove?: (pedido: PedidoPendente) => void;
+  showUnitFilter?: boolean;
 }
 
 type SortKey = 'data' | 'id' | 'unidade' | 'valor';
@@ -20,7 +21,8 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
   pedidos,
   currentPage,
   itemsPerPage,
-  onPageChange
+  onPageChange,
+  showUnitFilter = true
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter] = useState('todos');
@@ -47,12 +49,15 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
   }, [unique]);
 
+  const effectiveUnitFilter = showUnitFilter ? unitFilter : 'todas';
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return unique.filter(p => {
       const unidade = ((p as any).unidadeAdmin || '').trim();
-      if (unitFilter !== 'todas' && unidade !== unitFilter) return false;
+      if (effectiveUnitFilter !== 'todas' && unidade !== effectiveUnitFilter) return false;
       if (statusFilter !== 'todos') {
+        // reservado
       }
       if (!term) return true;
       return [
@@ -64,7 +69,7 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
         String((p as any).valor ?? ''),
       ].some(v => String(v).toLowerCase().includes(term));
     });
-  }, [unique, search, unitFilter, statusFilter]);
+  }, [unique, search, effectiveUnitFilter, statusFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -123,19 +128,21 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
             />
           </div>
 
-          {/* Filtro por Unidade Adm. */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
-              value={unitFilter}
-              onChange={(e) => setUnitFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              title="Filtrar por Unidade Administrativa"
-            >
-              <option value="todas">Todas as Unidades</option>
-              {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-          </div>
+          {/* Filtro por Unidade Adm. (apenas admin) */}
+          {showUnitFilter && (
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <select
+                value={unitFilter}
+                onChange={(e) => setUnitFilter(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                title="Filtrar por Unidade Administrativa"
+              >
+                <option value="todas">Todas as Unidades</option>
+                {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Ordenação */}
           <div className="flex items-center gap-2">

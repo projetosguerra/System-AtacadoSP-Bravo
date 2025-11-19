@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
+import { createContext, useState, useContext, ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { PedidoPendente, FinancialData, Setor, HistoricalOrder } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -17,7 +17,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
-  const { user, fetchAllUsers } = useAuth();
+  const { user, fetchAllUsers, token } = useAuth();
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoPendente[]>([]);
   const [orders, setOrders] = useState<HistoricalOrder[]>([]);
   const [financialData, setFinancialData] = useState<FinancialData | null>(null);
@@ -25,7 +25,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchOptions = { headers: { 'Cache-Control': 'no-cache' } };
+  // Cabeçalhos dinâmicos com Authorization
+  const fetchOptions = useMemo(() => {
+    const h: Record<string, string> = { 'Cache-Control': 'no-cache' };
+    if (token) h.Authorization = `Bearer ${token}`;
+    return { headers: h };
+  }, [token]);
 
   function uniqueById<T extends { id: number | string }>(arr: T[]): T[] {
     const map = new Map<string | number, T>();
@@ -35,7 +40,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return Array.from(map.values());
   }
 
-  // Janelas levinhas para hoje
   const PENDENTES_QS = '?days=30&maxrows=200';
   const HIST_QS      = '?days=30&maxrows=300';
   const FIN_QS       = '?days=14&maxOrders=300';
@@ -65,7 +69,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     try {
       await fetchFinancialData();
     } catch { /* mantém valor atual */ }
-  }, []);
+  }, [fetchOptions]);
 
   const fetchSetores = async () => {
     const response = await fetch('/api/setores', fetchOptions);
@@ -78,41 +82,32 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     setError(null);
     try {
-      // 1) Essencial primeiro
       await fetchSetores();
       await fetchPendingOrders();
 
-      // 2) Background: usuários e histórico (com pequeno atraso)
-      setTimeout(() => {
-        fetchAllUsers?.().catch(() => {});
-      }, 500);
-      setTimeout(() => {
-        fetchOrdersHistory().catch(err => console.error('[Data] historico bg erro:', err));
-      }, 800);
-
-      // 3) Financeiro por último e com mais atraso
-      setTimeout(() => {
-        fetchFinancialData().catch(err => console.error('[Data] financeiro bg erro:', err));
-      }, 2000);
+      setTimeout(() => { fetchAllUsers?.().catch(() => {}); }, 500);
+      setTimeout(() => { fetchOrdersHistory().catch(err => console.error('[Data] historico bg erro:', err)); }, 800);
+      setTimeout(() => { fetchFinancialData().catch(err => console.error('[Data] financeiro bg erro:', err)); }, 2000);
     } catch (err: any) {
       setError(err.message || 'Falha ao carregar dados iniciais.');
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAllUsers]);
+  }, [fetchAllUsers, fetchOptions]);
 
   useEffect(() => {
     refetchAllData();
   }, [refetchAllData]);
 
   const updateSetorLimit = useCallback(async (codsetor: number, saldo: number) => {
-    if (!user?.codUsuario) {
-      throw new Error('Usuário não autenticado para alterar limite.');
-    }
+    if (!user?.codUsuario) throw new Error('Usuário não autenticado para alterar limite.');
 
     const res = await fetch(`/api/setores/${codsetor}/limite`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ saldo, alteradoPorCodUsuario: user.codUsuario }),
     });
 
@@ -121,12 +116,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       throw new Error(err?.error || 'Falha ao atualizar limite do setor.');
     }
 
-    setSetores(prev =>
-      prev.map(s => (Number(s.CODSETOR) === Number(codsetor) ? ({ ...s, SALDO: saldo } as Setor) : s))
-    );
-
+    setSetores(prev => prev.map(s => (Number(s.CODSETOR) === Number(codsetor) ? ({ ...s, SALDO: saldo } as Setor) : s)));
     await fetchFinancialData().catch(() => {});
-  }, [user]);
+  }, [user, token, fetchFinancialData]);
 
   return (
     <DataContext.Provider
@@ -149,8 +141,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
 export const useData = () => {
   const context = useContext(DataContext);
-  if (context === undefined) {
-    throw new Error('useData must be used within a DataProvider');
-  }
+  if (context === undefined) throw new Error('useData must be used within a DataProvider');
   return context;
 };
