@@ -1,26 +1,12 @@
 import oracledb from 'oracledb';
 import { withConnection } from '../db/pool.js';
-import { getImagePrefix } from '../utils/imagePrefix.js';
+import { toImageUrl } from '../utils/images.js';
 
 const produtosCache = new Map<string, { at: number; data: any[] }>();
 const PROD_TTL = 60_000;
 const inflight = new Map<string, Promise<any[]>>();
 
 const INFLIGHT_THRESHOLD = Number(process.env.PRODUTOS_INFLIGHT_THRESHOLD ?? 12);
-
-function toImageUrl(rawPath: string | null | undefined, codprod: number) {
-  const placeholder = `https://placehold.co/300x200/eeeeee/333333?text=Produto+${codprod}`;
-  if (!rawPath) return placeholder;
-
-  const filename = String(rawPath).replace(/\\/g, '/').split('/').pop();
-  if (!filename) return placeholder;
-
-  const httpPrefix = process.env.PROD_IMG_HTTP_PREFIX;
-  if (httpPrefix) {
-    return `${httpPrefix.replace(/\/+$/, '')}/${encodeURIComponent(filename)}`;
-  }
-  return `/api/media/produtos/${encodeURIComponent(filename)}`;
-}
 
 export const listarProdutos = async (req: any, res: any) => {
   try {

@@ -66,7 +66,7 @@ export interface OrderItem extends Product {
   quantidade: number;
 }
 
-export interface OrderDetail {
+export interface LegacyOrderDetail {
   id: number;
   data: string;
   status: number;

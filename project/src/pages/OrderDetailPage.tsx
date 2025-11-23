@@ -7,7 +7,7 @@ import {
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, XCircle, CheckCircle } from 'lucide-react';
-import { OrderDetail } from '../types';
+import { LegacyOrderDetail } from '../types';
 import RejectModal from '../components/RejectModal';
 import { useData } from '../context/DataContext';
 import ConcatModal from '../components/ConcatModal';
@@ -33,7 +33,7 @@ const OrderDetailPage = () => {
   const navigate = useNavigate();
   const { refetchAllData } = useData();
 
-  const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [order, setOrder] = useState<LegacyOrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,9 +48,23 @@ const OrderDetailPage = () => {
   const abortRef = useRef<AbortController | null>(null);
   const committedRef = useRef(false);
 
+  // Normalization helpers: support different backend shapes
+  const getQty = (item: any): number => {
+    return Number(item.quantidade ?? item.qt ?? item.QTD ?? item.qty ?? 0) || 0;
+  };
+  const getPrice = (item: any): number => {
+    return Number(item.preco ?? item.precoUnit ?? item.preco_unit ?? item.price ?? 0) || 0;
+  };
+  const getUnit = (item: any): string => {
+    return String(item.unit ?? item.unidade ?? item.UNIDADE ?? '').trim();
+  };
+  const getIdKey = (item: any, idx: number) => {
+    return item.id ?? item.codProd ?? item.CODPROD ?? `r${idx}`;
+  };
+
   const totalValue = useMemo(() => {
-    if (!order) return 0;
-    return order.itens.reduce((sum, item) => sum + item.preco * item.quantidade, 0);
+    if (!order?.itens) return 0;
+    return order.itens.reduce((sum: number, item: any) => sum + getQty(item) * getPrice(item), 0);
   }, [order]);
 
   const belowMin = useMemo(() => {
@@ -70,7 +84,7 @@ const OrderDetailPage = () => {
     [id]
   );
 
-  // Lock 5->3 ao entrar
+  // Lock 5->3 ao entrar (mantive lógica sua, mas usei rota analise)
   useEffect(() => {
     let mounted = true;
     const fetchOrder = async () => {
@@ -78,17 +92,41 @@ const OrderDetailPage = () => {
       setIsLoading(true);
       setError(null);
       try {
-        await updateStatusAPI(3, 5);
-        try { abortRef.current?.abort(); } catch {}
+        // Primeiro tentar buscar (evita confusão se pedido ainda não existe)
+        try {
+          abortRef.current?.abort();
+        } catch {}
         abortRef.current = new AbortController();
         const timeout = setTimeout(() => abortRef.current?.abort(), 12_000);
-
-        const response = await fetch(`/api/pedido/${id}`, { signal: abortRef.current.signal });
+        const r1 = await fetch(`/api/pedido/${id}`, { signal: abortRef.current.signal });
         clearTimeout(timeout);
-        if (!response.ok) throw new Error('Pedido não encontrado ou já está em análise por outro usuário.');
-
-        const data: OrderDetail = await response.json();
-        if (mounted) setOrder(data);
+        if (!r1.ok) {
+          // Se não existir, tentar rota de análise (compatibilidade)
+          const r2 = await fetch(`/api/pedido/${id}`, { signal: abortRef.current.signal });
+          if (!r2.ok) throw new Error('Pedido não encontrado.');
+          const data2 = await r2.json();
+          if (mounted) setOrder(data2);
+          return;
+        }
+        const data = await r1.json();
+        // se pedido existe, tente travar apenas se status for 5
+        if (data?.status === 5) {
+          const lockResp = await updateStatusAPI(3, 5);
+          if (!lockResp.ok) {
+            if (lockResp.status === 409) {
+              const body = await lockResp.json().catch(() => ({}));
+              throw new Error(body?.error || 'Pedido já em análise por outro usuário.');
+            }
+            throw new Error('Falha ao trancar pedido para análise.');
+          }
+          // refetch after lock
+          const after = await fetch(`/api/pedido/${id}`);
+          if (!after.ok) throw new Error('Pedido não encontrado após lock.');
+          const dataAfter = await after.json();
+          if (mounted) setOrder(dataAfter);
+        } else {
+          if (mounted) setOrder(data);
+        }
       } catch (err: any) {
         if (err?.name === 'AbortError') return;
         if (mounted) {
@@ -103,8 +141,8 @@ const OrderDetailPage = () => {
 
     return () => {
       mounted = false;
-      // fallback se desmontar sem concluir ação
       if (order?.status === 3 && !committedRef.current) {
+        // tenta reverter o lock (rota analise)
         updateStatusAPI(5, 3).catch(() => {});
       }
       try { abortRef.current?.abort(); } catch {}
@@ -112,7 +150,7 @@ const OrderDetailPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Contexto de concat sempre (5 ou 3)
+  // Contexto de concat sempre (5 ou 3) — mantive sua rota de análise
   useEffect(() => {
     let active = true;
     async function loadContext() {
@@ -136,7 +174,7 @@ const OrderDetailPage = () => {
     return () => { active = false; };
   }, [id, totalValue]);
 
-  // Desbloqueio garantido ao sair da página/aba (casos abruptos)
+  // unlock ao sair da página/aba
   useEffect(() => {
     const unlock = () => {
       if (!id) return;
@@ -160,7 +198,6 @@ const OrderDetailPage = () => {
     };
   }, [id]);
 
-  // Navegar de volta com unlock síncrono para evitar race no Painel
   const handleBack = async () => {
     try {
       await fetch(`/api/pedido/${id}/unlock`, { method: 'POST' });
@@ -288,16 +325,21 @@ const OrderDetailPage = () => {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {order.itens.map(item => (
-              <tr key={item.id}>
-                <td className="px-6 py-4">{item.nome}</td>
-                <td className="px-6 py-4">{item.quantidade} {item.unit}</td>
-                <td className="px-6 py-4">{formatCurrency(item.preco)}</td>
-                <td className="px-6 py-4 font-semibold">
-                  {formatCurrency(item.preco * item.quantidade)}
-                </td>
-              </tr>
-            ))}
+            {order.itens.map((item: any, idx: number) => {
+              const qty = getQty(item);
+              const price = getPrice(item);
+              const subtotal = +(qty * price);
+              return (
+                <tr key={getIdKey(item, idx)}>
+                  <td className="px-6 py-4">{item.nome}</td>
+                  <td className="px-6 py-4">{qty} {getUnit(item)}</td>
+                  <td className="px-6 py-4">{formatCurrency(price)}</td>
+                  <td className="px-6 py-4 font-semibold">
+                    {formatCurrency(subtotal)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot className="bg-gray-100 font-bold">
             <tr>

@@ -40,7 +40,6 @@ export const getConcatContext = async (req: any, res: any) => {
 
   try {
     const data = await withConnection(async (conn) => {
-      // Meta do pedido base
       const meta = await conn.execute(
         `SELECT u.CODSETOR, p.STATUS
            FROM BRAMV_PEDIDOC p
@@ -53,7 +52,6 @@ export const getConcatContext = async (req: any, res: any) => {
       if (!row) throw new Error('Pedido base não encontrado.');
       const codSetor = Number(row.CODSETOR);
 
-      // Base: itens e total
       const baseItemsCountRes = await conn.execute(
         `SELECT COUNT(*) AS QTD FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id`,
         { id },
@@ -76,7 +74,6 @@ export const getConcatContext = async (req: any, res: any) => {
         baseValue = toNum((hdr.rows?.[0] as any)?.TOTAL);
       }
 
-      // Candidatos: contar itens e somar; ainda exigimos STATUS=5 aqui
       const r = await conn.execute(
         `SELECT p.NUMPEDRCA AS ID,
                 p.DATA         AS DATA,
@@ -131,7 +128,6 @@ export const createConcat = async (req: any, res: any) => {
 
   try {
     const outcome = await withConnection(async (conn) => {
-      // Lock
       const placeholders = allIds.map((_, i) => `:p${i}`).join(',');
       const binds: Record<string, any> = {};
       allIds.forEach((val, i) => (binds[`p${i}`] = val));
@@ -151,27 +147,23 @@ export const createConcat = async (req: any, res: any) => {
       const rows = (lock.rows || []) as any[];
       if (rows.length !== allIds.length) throw new Error('Pedido inexistente na seleção.');
 
-      // Mesmo setor
       const setorRef = Number(rows[0].CODSETOR);
       for (const r of rows) {
         if (Number(r.CODSETOR) !== setorRef) throw new Error(`Pedido #${r.ID} de outro setor.`);
       }
 
-      // Base pode estar 5 ou 3
       const baseRow = rows.find(r => Number(r.ID) === idBase);
       if (!baseRow) throw new Error('Pedido base não encontrado.');
       const baseStatus = Number(baseRow.STATUS);
       if (![5, 3].includes(baseStatus)) throw new Error(`Pedido base #${idBase} não elegível (status=${baseStatus}).`);
       if (String(baseRow.PAPEL) === 'ORIGEM') throw new Error(`Pedido base #${idBase} já é origem de concatenação.`);
 
-      // Demais devem estar 5 e não ORIGEM
       for (const r of rows) {
         if (Number(r.ID) === idBase) continue;
         if (Number(r.STATUS) !== 5) throw new Error(`Pedido #${r.ID} não está pendente (status=${r.STATUS}).`);
         if (String(r.PAPEL) === 'ORIGEM') throw new Error(`Pedido #${r.ID} já é origem de concatenação.`);
       }
 
-      // Validação forte: todos os pedidos precisam ter itens
       const missing = await (async () => {
         const rs = await conn.execute(
           `SELECT NUMPEDRCA, COUNT(*) AS QTD
@@ -193,7 +185,6 @@ export const createConcat = async (req: any, res: any) => {
         throw err;
       }
 
-      // Agregar itens
       const items = await conn.execute(
         `SELECT i.CODPROD,
                 SUM(i.QT)     AS QT,
@@ -213,7 +204,6 @@ export const createConcat = async (req: any, res: any) => {
       if (total < MIN_VALUE) throw new Error(`Total (${total.toFixed(2)}) abaixo do mínimo (${MIN_VALUE.toFixed(2)}).`);
       const qtdItens = aggItems.length;
 
-      // Gera novo NUMPEDRCA via PCUSUARI.PROXNUMPEDFORCA
       const cli = await conn.execute(
         `SELECT NVL(CODUSUR2, CODUSUR1) CODUSUR FROM PCCLIENT WHERE CODCLI = :codcli`,
         { codcli: Number(process.env.CODCLI ?? 27995) },
@@ -233,7 +223,6 @@ export const createConcat = async (req: any, res: any) => {
         { rca: codRca }
       );
 
-      // CODUSUARIO do base
       const rUser = await conn.execute(
         `SELECT CODUSUARIO FROM BRAMV_PEDIDOC WHERE NUMPEDRCA = :id`,
         { id: idBase },
@@ -242,7 +231,6 @@ export const createConcat = async (req: any, res: any) => {
       const codUsuario = toNum((rUser.rows?.[0] as any)?.CODUSUARIO, NaN);
       const createdBy = toNum(req.user?.codUsuario ?? null, NaN) || null;
 
-      // Header resultante
       await conn.execute(
         `INSERT INTO BRAMV_PEDIDOC
            (NUMPEDRCA, DATA, CODUSUARIO, STATUS, QTD_ITENS, VALOR_TOTAL,
@@ -253,14 +241,12 @@ export const createConcat = async (req: any, res: any) => {
         { id: newId, codUsuario, qtd: qtdItens, total, grp: newId, createdBy }
       );
 
-      // Itens agregados
       await conn.executeMany(
         `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA)
          VALUES (:id, :codprod, :qt, :pvenda)`,
         aggItems.map(it => ({ id: newId, codprod: it.codprod, qt: it.qt, pvenda: it.pvenda }))
       );
 
-      // Mapeamento e arquivamento
       await conn.executeMany(
         `INSERT INTO BRAMV_PEDIDO_CONCAT_SRC (GRUPO_ID, PEDIDO_NOVO, PEDIDO_ORIGEM, CRIADO_POR)
          VALUES (:grp, :newId, :src, :createdBy)`,

@@ -23,13 +23,11 @@ function mapConcatRole(papel?: string | null): 'RESULT' | 'SOURCE' | null {
   return null;
 }
 
-// Normaliza usuário de middleware variados
 function readUserScope(u: any): { perfil: 'ADMIN'|'APROVADOR'|'SOLICITANTE'; codSetor?: number; codUsuario?: number } {
   const rawPerfil =
     u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
   const perfilUp = String(rawPerfil).trim().toUpperCase();
 
-  // Também aceitar tipo numérico se existir (1=ADMIN, 2=APROVADOR, 3=SOLICITANTE)
   const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? NaN);
   let perfil: 'ADMIN'|'APROVADOR'|'SOLICITANTE';
   if (['ADMIN','APROVADOR','SOLICITANTE'].includes(perfilUp)) {
@@ -37,7 +35,6 @@ function readUserScope(u: any): { perfil: 'ADMIN'|'APROVADOR'|'SOLICITANTE'; cod
   } else if (Number.isFinite(tipoNum)) {
     perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
   } else {
-    // fallback conservador: tratar como aprovador (mais restritivo)
     perfil = 'APROVADOR';
   }
 

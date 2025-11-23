@@ -36,7 +36,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
                         className="max-h-full max-w-full object-contain p-3"
                         onError={(e) => {
                             const el = e.currentTarget as HTMLImageElement;
-                            el.onerror = null; // evita loop
+                            el.onerror = null; 
                             el.src = `https://placehold.co/600x400/ffffff/cccccc?text=${encodeURIComponent(
                                 product.nome?.slice(0, 32) || `Produto ${product.id}`
                             )}`;
