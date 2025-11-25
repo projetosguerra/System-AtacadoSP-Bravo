@@ -32,6 +32,24 @@ function formatCurrency(v?: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
 }
 
+// Helper para resolver URL de imagem dos itens do pedido
+const isPlaceholder = (u?: string) => !!u && /placehold|placeholder|text=Produto/i.test(u);
+const buildPedidoImgUrl = (item: any) => {
+  const original = item?.imgUrl as string | undefined;
+  if (original && !isPlaceholder(original)) return original;
+  const code = item?.codProd ?? item?.codigoAuxiliar ?? item?.id;
+  return code ? `/api/media/produtos/${code}.JPG` : (original ?? '');
+};
+const onImgError = (e: React.SyntheticEvent<HTMLImageElement, Event>, item: any) => {
+  const el = e.currentTarget;
+  // Evita loop infinito
+  if (el.dataset.fallbackDone === '1') return;
+  el.dataset.fallbackDone = '1';
+  // Tenta com codigoAuxiliar se existir, senão usa um placeholder visual
+  const altCode = item?.codigoAuxiliar ?? item?.codProd;
+  el.src = altCode ? `/api/media/produtos/${altCode}.JPG` : `https://placehold.co/56x56?text=${encodeURIComponent('Produto')}`;
+};
+
 const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -91,7 +109,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
 
   const somaLocal = useMemo(() => {
     if (!data?.itens) return 0;
-    return data.itens.reduce((sum, it) => sum + Number(it.subtotal || 0), 0);
+    return (data.itens as any[]).reduce((sum, it) => sum + Number(it.subtotal || 0), 0);
   }, [data?.itens]);
 
   if (!open) return null;
@@ -181,7 +199,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
 
               <EdicaoResumo eventos={data.eventos} />
 
-              {/* Itens (mantive seu markup) */}
+              {/* Itens */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-gray-800">Itens ({data.itens.length})</h4>
 
@@ -203,7 +221,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-3">
                               <img
-                                src={it.imgUrl}
+                                src={buildPedidoImgUrl(it)}
+                                onError={(e) => onImgError(e, it)}
                                 alt={it.nome}
                                 className="w-14 h-14 object-cover rounded border border-gray-200 bg-white"
                                 loading="lazy"
@@ -237,7 +256,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                   {data.itens.map(it => (
                     <div key={it.codProd} className="border border-gray-200 rounded-lg p-3 flex gap-3">
                       <img
-                        src={it.imgUrl}
+                        src={buildPedidoImgUrl(it)}
+                        onError={(e) => onImgError(e, it)}
                         alt={it.nome}
                         className="w-16 h-16 object-cover rounded border border-gray-200 bg-white"
                         loading="lazy"
@@ -264,7 +284,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 </div>
               </div>
 
-              {/* Transportadora (mantive seu bloco) */}
+              {/* Transportadora */}
               {transportadora && (
                 <div className="space-y-3">
                   <h4 className="font-semibold text-gray-800">Transportadora</h4>
@@ -291,7 +311,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 </div>
               )}
 
-              {/* Financeiro (mantive seu bloco) */}
+              {/* Financeiro */}
               {financeiro && Array.isArray(financeiro.parcelas) && financeiro.parcelas.length > 0 && (
                 <div className="space-y-3">
                   <h4 className="font-semibold text-gray-800">Financeiro</h4>
@@ -326,7 +346,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 </div>
               )}
 
-              {/* Concatenação e Eventos (mantive seu código) */}
+              {/* Concatenação e Eventos */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-gray-800">Concatenação</h4>
                 {data.concatRole === 'RESULTADO' && data.concatOrigens.length > 0 && (

@@ -31,6 +31,15 @@ function statusBadge(status: number) {
   }
 }
 
+// Helpers de imagem
+const isPlaceholder = (u?: string) => !!u && /placehold|placeholder|text=Produto/i.test(u);
+const resolveImgUrl = (item: any) => {
+  const original = item?.imgUrl as string | undefined;
+  if (original && !isPlaceholder(original)) return original;
+  const code = item?.codProd ?? item?.codigoAuxiliar ?? item?.id;
+  return code ? `/api/media/produtos/${code}.JPG` : (original ?? '');
+};
+
 const OrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -335,7 +344,7 @@ const OrderDetailPage = () => {
                 <tr key={getIdKey(item, idx)}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <img src={item.imgUrl} alt={item.nome} className="w-12 h-12 rounded object-cover" />
+                      <img src={resolveImgUrl(item)} alt={item.nome} className="w-12 h-12 rounded object-cover" />
                       <span>{item.nome}</span>
                     </div>
                   </td>

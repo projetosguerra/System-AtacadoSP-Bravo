@@ -820,7 +820,6 @@ export const editarItensPedido = async (req: any, res: any) => {
     return res.status(400).json({ error: 'Nenhum item válido após normalização.' });
   }
 
-  // Helper tolerant
   function readUserScopeLoose(u: any) {
     const rawPerfil =
       u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
@@ -861,7 +860,6 @@ export const editarItensPedido = async (req: any, res: any) => {
 
   try {
     const payload = await withConnection(async (connection) => {
-      // Lock cabeçalho
       const hdrR = await connection.execute(
         `SELECT p.STATUS,
                 u.CODSETOR   AS SETOR_SOLICITANTE,
@@ -888,9 +886,7 @@ export const editarItensPedido = async (req: any, res: any) => {
         throw err;
       }
 
-      // Fallback: buscar dados do aprovador se codSetor ou codUsuario faltam
       if (!Number.isFinite(usuarioEditorId) || !Number.isFinite(codSetorEditor)) {
-        // Tentar pegar codUsuario de req.user.id se não definido
         if (!Number.isFinite(usuarioEditorId)) {
           const idCandidates = [
             req.user?.codUsuario, req.user?.CODUSUARIO, req.user?.id,
@@ -917,7 +913,6 @@ export const editarItensPedido = async (req: any, res: any) => {
         }
       }
 
-      // Permissão
       if (!ignoreSetor) {
         if (perfil !== 'ADMIN') {
           if (perfil !== 'APROVADOR') {
@@ -938,14 +933,12 @@ export const editarItensPedido = async (req: any, res: any) => {
         }
       }
 
-      // Bloqueio opcional de concatenados (ajuste conforme regra)
       if (['RESULTADO','ORIGEM'].includes(concatPapel)) {
         const err: any = new Error('Pedido concatenado não pode ser editado.');
         err.statusCode = 403;
         throw err;
       }
 
-      // Carrega itens atuais
       const itensAtuaisR = await connection.execute(
         `SELECT CODPROD, QT, PVENDA
            FROM BRAMV_PEDIDOI
@@ -960,7 +953,6 @@ export const editarItensPedido = async (req: any, res: any) => {
         pvenda: Number(r.PVENDA)
       }));
 
-      // Agregar duplicados
       const agg = new Map<number, number>();
       for (const it of normalizados) {
         agg.set(it.codProd, (agg.get(it.codProd) || 0) + it.qt);

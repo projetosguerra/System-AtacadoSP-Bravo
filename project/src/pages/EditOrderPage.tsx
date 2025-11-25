@@ -16,6 +16,14 @@ interface RawItem {
 
 const MIN_VALUE = PEDIDO_MIN_VALUE;
 
+// Helper: sempre use a imagem real pelo código do produto (fallback para imgUrl se válido)
+const isPlaceholder = (u?: string) => !!u && /placehold|placeholder|text=Produto/i.test(u);
+const resolveImgUrl = (codProd?: number | string, codigoAuxiliar?: number | string, original?: string) => {
+  if (original && !isPlaceholder(original)) return original;
+  const code = codProd ?? codigoAuxiliar;
+  return code ? `/api/media/produtos/${code}.JPG` : (original ?? '');
+};
+
 const EditOrderPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -70,7 +78,8 @@ const EditOrderPage: React.FC = () => {
         unidade: it.unidade,
         qt: it.qt || it.quantidade || 0,
         precoUnit: it.precoUnit || it.preco || 0,
-        imgUrl: it.imgUrl || ''
+        // força a imagem real pelo código
+        imgUrl: resolveImgUrl(it.codProd, it.codigoAuxiliar, it.imgUrl)
       }));
       setItems(mapped);
     } catch (e: any) {
@@ -119,7 +128,7 @@ const EditOrderPage: React.FC = () => {
         unidade: p.unit,
         qt: 1,
         precoUnit: p.preco,
-        imgUrl: p.imgUrl
+        imgUrl: resolveImgUrl(p.id, p.codigoAuxiliar, p.imgUrl)
       }];
     });
     setSearchProd('');
@@ -224,7 +233,7 @@ const EditOrderPage: React.FC = () => {
                   className="border rounded p-3 flex flex-col gap-2 hover:shadow cursor-pointer"
                   onClick={() => addProduct(pr)}
                 >
-                  <img src={pr.imgUrl} alt={pr.nome} className="w-full h-24 object-cover rounded" />
+                  <img src={resolveImgUrl(pr.id, pr.codigoAuxiliar, pr.imgUrl)} alt={pr.nome} className="w-full h-24 object-cover rounded" />
                   <div className="text-sm font-medium">{pr.nome}</div>
                   <div className="text-xs text-gray-500">{pr.unit}</div>
                   <div className="text-sm font-semibold">
