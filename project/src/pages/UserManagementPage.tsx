@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, ChevronDown } from 'lucide-react';
 import AddUserModal from '../components/AddUserModal';
 import UserDetailsModal from '../components/UserDetailsModal';
@@ -8,7 +8,8 @@ import { User } from '../types';
 export const UserManagementPage = () => {
   const { allUsers, fetchAllUsers } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterValue, setFilterValue] = useState('Todos');
+  const [filterValue, setFilterValue] = useState('Todos');   // filtro por perfil (tipoUsuario)
+  const [unitFilter, setUnitFilter] = useState('Todas');     // novo filtro por unidade (codSetor)
   const [isAddModalOpen, setAddModalOpen] = useState(false);
   const [isDetailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -17,13 +18,34 @@ export const UserManagementPage = () => {
   const [error] = useState<string | null>(null);
   const users = allUsers || [];
 
+  // Opções únicas de unidades (por codSetor), rotuladas como "COD - SETOR"
+  const unitOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of users) {
+      const code = u?.codSetor;
+      if (code == null) continue;
+      const value = String(code);
+      const label = `${code} - ${u?.setor || 'Sem descrição'}`;
+      if (!map.has(value)) map.set(value, label);
+    }
+    return Array.from(map, ([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [users]);
+
   const filteredUsers = (users || []).filter(user => {
-    const searchMatch = searchTerm === '' ||
+    const searchMatch =
+      searchTerm === '' ||
       Object.values(user).some(value =>
-        String(value).toLowerCase().includes(searchTerm.toLowerCase())
+        String(value ?? '').toLowerCase().includes(searchTerm.toLowerCase())
       );
-    const filterMatch = filterValue === 'Todos' || String(user.tipoUsuario) === filterValue;
-    return searchMatch && filterMatch;
+
+    const perfilMatch = filterValue === 'Todos' || String(user.tipoUsuario) === filterValue;
+
+    const unidadeMatch =
+      unitFilter === 'Todas' ||
+      (user.codSetor != null && String(user.codSetor) === unitFilter);
+
+    return searchMatch && perfilMatch && unidadeMatch;
   });
 
   useEffect(() => {
@@ -81,7 +103,7 @@ export const UserManagementPage = () => {
           <h1 className="text-3xl font-bold text-gray-900">Gerenciamento de Usuários</h1>
           <button
             onClick={() => setAddModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition-all duração-200"
+            className="flex items-center gap-2 px-5 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition-all"
           >
             <Plus className="w-5 h-5" />
             Adicionar Usuário
@@ -89,7 +111,7 @@ export const UserManagementPage = () => {
         </div>
 
         {/* Filtros e Busca */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -100,6 +122,8 @@ export const UserManagementPage = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+
+          {/* Filtro por Perfil */}
           <div className="relative">
             <select
               className="appearance-none pl-4 pr-10 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -110,6 +134,23 @@ export const UserManagementPage = () => {
               <option value="1">Admin</option>
               <option value="2">Aprovador</option>
               <option value="3">Solicitante</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+          </div>
+
+          {/* Filtro por Unidade Administrativa */}
+          <div className="relative">
+            <select
+              className="appearance-none pl-4 pr-10 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium max-w-[260px]"
+              value={unitFilter}
+              onChange={(e) => setUnitFilter(e.target.value)}
+              disabled={unitOptions.length === 0}
+              title={unitOptions.length === 0 ? 'Nenhuma unidade disponível' : 'Filtrar por Unidade Administrativa'}
+            >
+              <option value="Todas">Todas as Unidades</option>
+              {unitOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
           </div>
@@ -134,7 +175,7 @@ export const UserManagementPage = () => {
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">N/S</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">PRIMEIRO NOME</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">ULTIMO NOME</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">ÚLTIMO NOME</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">GÊNERO</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">ID DO FUNC.</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">NUM. DE TELEFONE</th>
@@ -157,8 +198,11 @@ export const UserManagementPage = () => {
                         {user.ultimoNome}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${user.genero === 'Masculino' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
-                          }`}>
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            user.genero === 'Masculino' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
+                          }`}
+                        >
                           {user.genero}
                         </span>
                       </td>
@@ -169,15 +213,22 @@ export const UserManagementPage = () => {
                         {user.numeroTelefone || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${user.tipoUsuario === 1 ? 'bg-purple-100 text-purple-800' :
-                          user.tipoUsuario === 2 ? 'bg-orange-100 text-orange-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
+                        <span
+                          className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
+                            user.tipoUsuario === 1
+                              ? 'bg-purple-100 text-purple-800'
+                              : user.tipoUsuario === 2
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}
+                        >
                           {getRoleName(user.tipoUsuario)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {user.codSetor || 'N/A'}
+                        {user.codSetor != null
+                          ? `${user.codSetor} - ${user.setor || 'Sem descrição'}`
+                          : 'N/A'}
                       </td>
                       <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm text-right">
                         <button
@@ -197,10 +248,9 @@ export const UserManagementPage = () => {
           <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <button
-                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${currentPage === 1
-                  ? 'bg-red-500 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                  }`}
+                className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  currentPage === 1 ? 'bg-red-500 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
               >
                 1
               </button>
@@ -213,6 +263,7 @@ export const UserManagementPage = () => {
               Mostrando {filteredUsers.length} de {users.length} usuários
             </div>
           </div>
+
           {isAddModalOpen && (
             <AddUserModal
               isOpen={isAddModalOpen}
@@ -224,7 +275,6 @@ export const UserManagementPage = () => {
           <UserDetailsModal
             user={selectedUser}
             onClose={() => {
-              console.log("Função 'onClose' foi chamada na página principal (UserManagementPage).");
               setDetailsModalOpen(false);
               setSelectedUser(null);
             }}

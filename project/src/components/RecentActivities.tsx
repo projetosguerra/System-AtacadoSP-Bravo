@@ -29,7 +29,7 @@ function timeAgoPT(date: Date) {
 
 type ActivityType = 'approved' | 'rejected' | 'analysis' | 'pending';
 type Activity = {
-  id: string | number;
+  id: number | string;
   when: Date;
   type: ActivityType;
   title: string;
@@ -51,7 +51,7 @@ const colorByType: Record<ActivityType, { dot: string; text: string; Icon: any }
   pending:  { dot: 'bg-yellow-500', text: 'text-yellow-700', Icon: Clock3 },
 };
 
-const AUTO_REFRESH_MS = 30000; 
+const AUTO_REFRESH_MS = 30000;
 
 const RecentActivities = () => {
   const { orders, pedidosPendentes, refetchAllData } = useData();
@@ -64,7 +64,9 @@ const RecentActivities = () => {
 
   const activities = useMemo<Activity[]>(() => {
     const out: Activity[] = [];
+    const seenPendingIdsFromOrders = new Set<number | string>();
 
+    // Fonte: orders (já contém status pendente também)
     for (const o of orders || []) {
       const type = statusToType((o as any)?.status);
       const when = pickWhen(o as any);
@@ -80,30 +82,49 @@ const RecentActivities = () => {
       : type === 'analysis' ? `Pedido #${id} em análise`
       : `Pedido #${id} pendente`;
 
-      const details = [];
+      if (type === 'pending') {
+        seenPendingIdsFromOrders.add(id);
+      }
+
+      const details: string[] = [];
       if (solicitante) details.push(`Solicitante: ${solicitante}`);
       if (setor) details.push(`Uni. Adm.: ${setor}`);
 
       out.push({ id, when, type, title, detail: details.join(' • ') });
     }
 
+    // Fonte: pedidosPendentes – somente os que NÃO apareceram em orders (evita duplicação)
     for (const p of pedidosPendentes || []) {
+      const id = (p as any)?.id;
+      if (seenPendingIdsFromOrders.has(id)) continue; // skip duplicado
+
       const when = pickWhen(p as any);
       if (!when) continue;
-      const id = (p as any)?.id;
+
       const solicitante = (p as any)?.solicitante || '';
       const unidadeAdmin = (p as any)?.unidadeAdmin || 'N/A';
+
       out.push({
         id,
         when,
         type: 'pending',
         title: `Pedido #${id} aguardando análise`,
-        detail: [`Solicitante: ${solicitante}`, `Uni. Adm.: ${unidadeAdmin}`].join(' • '),
+        detail: [`Solicitante: ${solicitante}`, `Uni. Adm.: ${unidadeAdmin}`].join(' • ')
       });
     }
 
-    out.sort((a, b) => b.when.getTime() - a.when.getTime());
-    return out.slice(0, 5);
+    // Deduplicação defensiva (caso tenha algo repetido por futuro ajuste)
+    const unique: Activity[] = [];
+    const keySet = new Set<string>();
+    for (const a of out) {
+      const key = `${a.type}|${a.id}|${a.when.getTime()}`;
+      if (keySet.has(key)) continue;
+      keySet.add(key);
+      unique.push(a);
+    }
+
+    unique.sort((a, b) => b.when.getTime() - a.when.getTime());
+    return unique.slice(0, 5);
   }, [orders, pedidosPendentes]);
 
   return (
@@ -121,8 +142,12 @@ const RecentActivities = () => {
         <ul className="space-y-3">
           {activities.map((act) => {
             const style = colorByType[act.type];
+            const key = `${act.type}-${act.id}-${act.when.getTime()}`;
             return (
-              <li key={`${act.type}-${act.id}-${act.when.getTime()}`} className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-b-0">
+              <li
+                key={key}
+                className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-b-0"
+              >
                 <div className={`mt-0.5 w-2 h-2 rounded-full ${style.dot}`} aria-hidden />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">

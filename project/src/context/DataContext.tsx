@@ -25,7 +25,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cabeçalhos dinâmicos com Authorization
   const fetchOptions = useMemo(() => {
     const h: Record<string, string> = { 'Cache-Control': 'no-cache' };
     if (token) h.Authorization = `Bearer ${token}`;

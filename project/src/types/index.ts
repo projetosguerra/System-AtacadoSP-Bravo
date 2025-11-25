@@ -21,6 +21,8 @@ export interface Setor {
   CODSETOR: number;
   DESCRICAO: string;
   SALDO: number;
+  LIMITE: number;
+  CENTRO_CUSTO: string;
 }
 
 export interface KpiData {
@@ -55,12 +57,15 @@ export interface CartItem extends Product {
 export interface PedidoPendente {
   id: number;
   data: string;
-  status: number;
+  status?: number;
   solicitante: string;
-  unidadeAdmin: string;    
+  unidadeAdmin: string;
   qtdItens: number;
   valor: number;
+  concatRole?: 'RESULTADO' | 'ORIGEM' | null;
+  concatGroupId?: number | null;
 }
+
 
 export interface OrderItem extends Product {
   quantidade: number;

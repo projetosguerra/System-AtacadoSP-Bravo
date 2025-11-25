@@ -1,7 +1,7 @@
 import oracledb from 'oracledb';
 import { withConnection } from '../db/pool.js';
 
-const MIN_VALUE = 200;
+const MIN_VALUE = 400;
 
 function toNum(x: any, d = 0) { const n = Number(x); return Number.isFinite(n) ? n : d; }
 

@@ -1,6 +1,8 @@
+/* Patch: badges concat + botão Editar */
+
 import React, { useMemo, useState, useEffect } from 'react';
-import { Search, Filter, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Search, Filter, ArrowUpDown, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { PedidoPendente } from '../types';
 
 interface PendingOrdersTableProps {
@@ -8,7 +10,6 @@ interface PendingOrdersTableProps {
   currentPage: number;
   itemsPerPage: number;
   onPageChange: (page: number) => void;
-  onApprove?: (pedido: PedidoPendente) => void;
   showUnitFilter?: boolean;
 }
 
@@ -29,6 +30,7 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
   const [unitFilter, setUnitFilter] = useState('todas');
   const [sortKey, setSortKey] = useState<SortKey>('data');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const navigate = useNavigate();
 
   useEffect(() => { onPageChange(1); }, [search, statusFilter, unitFilter, sortKey, sortDir, pedidos.length]); // eslint-disable-line
 
@@ -57,7 +59,7 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
       const unidade = ((p as any).unidadeAdmin || '').trim();
       if (effectiveUnitFilter !== 'todas' && unidade !== effectiveUnitFilter) return false;
       if (statusFilter !== 'todos') {
-        // reservado
+        // reservado para futura filtragem por status
       }
       if (!term) return true;
       return [
@@ -103,6 +105,10 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
   };
   const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(toNumber(v));
 
+  const canEditRow = (p: PedidoPendente) =>
+    [5, 3].includes(Number(p.status ?? 5)) &&
+    (p.concatRole !== 'RESULTADO' && p.concatRole !== 'ORIGEM');
+
   const maxButtons = 7;
   const half = Math.floor(maxButtons / 2);
   let startBtn = Math.max(1, safePage - half);
@@ -112,11 +118,10 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Pedidos Pendentes</h2>
-
         <div className="flex items-center gap-4 flex-wrap">
-          {/* Busca */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -127,8 +132,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-          {/* Filtro por Unidade Adm. (apenas admin) */}
           {showUnitFilter && (
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-400" />
@@ -136,7 +139,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
                 value={unitFilter}
                 onChange={(e) => setUnitFilter(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                title="Filtrar por Unidade Administrativa"
               >
                 <option value="todas">Todas as Unidades</option>
                 {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
@@ -144,7 +146,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
             </div>
           )}
 
-          {/* Ordenação */}
           <div className="flex items-center gap-2">
             <ArrowUpDown className="w-4 h-4 text-gray-400" />
             <select
@@ -154,7 +155,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
             >
               <option value="data">Ordenar por Data</option>
               <option value="id">Ordenar por ID</option>
-              <option value="unidade">Ordenar por Uni. Adm.</option>
               <option value="valor">Ordenar por Valor</option>
             </select>
             <select
@@ -180,36 +180,64 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uni. Adm.</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QTD de Itens</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QTD Itens</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ação</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {pageItems.map((p, index) => (
-              <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {String(startIndex + index + 1).padStart(2, '0')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate((p as any).data)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime((p as any).data)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{p.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.solicitante}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{(p as any)?.unidadeAdmin || 'N/A'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{(p as any)?.qtdItens ?? 0}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                  {formatCurrency((p as any)?.valor)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <Link
-                    to={`/pedido/${p.id}`}
-                    className="inline-flex items-center px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Analisar
-                  </Link>
-                </td>
-              </tr>
-            ))}
+            {pageItems.map((p, index) => {
+              const ns = String(startIndex + index + 1).padStart(2, '0');
+              return (
+                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ns}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(p.data)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime(p.data)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 flex items-center gap-2">
+                    {p.id}
+                    {p.concatRole === 'RESULTADO' && (
+                      <span
+                        className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700"
+                        title={`Pedido resultado da concatenação (Grupo ${p.concatGroupId})`}
+                      >
+                        Concatenado
+                      </span>
+                    )}
+                    {p.concatRole === 'ORIGEM' && (
+                      <span
+                        className="px-2 py-0.5 text-[10px] rounded-full bg-gray-100 text-gray-700"
+                        title={`Pedido origem (Grupo ${p.concatGroupId})`}
+                      >
+                        ORIGEM
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.solicitante}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{p.unidadeAdmin || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{p.qtdItens}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                    {formatCurrency(p.valor)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm flex gap-2">
+                    <Link
+                      to={`/pedido/${p.id}`}
+                      className="inline-flex items-center px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      Analisar
+                    </Link>
+                    {canEditRow(p) && (
+                      <button
+                        onClick={() => navigate(`/pedido/${p.id}/editar`)}
+                        className="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                        title="Editar itens do pedido"
+                      >
+                        <Pencil className="w-4 h-4 mr-1" /> Editar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {pageItems.length === 0 && (
               <tr>
                 <td className="px-6 py-8 text-center text-gray-500" colSpan={9}>
@@ -226,7 +254,6 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
         <div className="text-sm text-gray-700">
           Mostrando {total === 0 ? 0 : startIndex + 1}-{Math.min(endIndex, total)} de {total} pedidos
         </div>
-
         <div className="flex items-center space-x-2">
           <button
             onClick={() => onPageChange(safePage - 1)}
@@ -240,46 +267,23 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-
-          {startBtn > 1 && (
-            <>
-              <button
-                onClick={() => onPageChange(1)}
-                className="px-3 py-2 text-sm font-medium rounded-md bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-              >
-                1
-              </button>
-              {startBtn > 2 && <span className="px-2 text-gray-400">…</span>}
-            </>
-          )}
-
-          {pages.map((p) => {
+          {/* Botões dinâmicos */}
+          {pages.map(p => {
             const active = p === safePage;
             return (
               <button
                 key={p}
                 onClick={() => onPageChange(p)}
                 className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                  active ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  active
+                    ? 'bg-red-500 text-white border-red-500'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 {p}
               </button>
             );
           })}
-
-          {endBtn < totalPages && (
-            <>
-              {endBtn < totalPages - 1 && <span className="px-2 text-gray-400">…</span>}
-              <button
-                onClick={() => onPageChange(totalPages)}
-                className="px-3 py-2 text-sm font-medium rounded-md bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-              >
-                {totalPages}
-              </button>
-            </>
-          )}
-
           <button
             onClick={() => onPageChange(safePage + 1)}
             disabled={safePage >= totalPages}

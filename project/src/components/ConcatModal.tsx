@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 interface Candidate {
   id: number;
@@ -16,17 +17,19 @@ interface ConcatContext {
   codSetor: number;
 }
 
-export default function ConcatModal({
-  pedidoId,
-  isOpen,
-  onClose,
-  onDone,
-}: {
+export default function ConcatModal({ pedidoId, isOpen, onClose, onDone }: {
   pedidoId: number;
   isOpen: boolean;
   onClose: () => void;
   onDone: (newId: number) => void;
 }) {
+  const { token } = useAuth();
+  function buildHeaders(contentType?: string): Record<string,string> {
+    const h: Record<string,string> = {};
+    if (contentType) h['Content-Type'] = contentType;
+    if (token) h.Authorization = `Bearer ${token}`;
+    return h;
+  }
   const [ctx, setCtx] = useState<ConcatContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
@@ -39,14 +42,14 @@ export default function ConcatModal({
     setSelected([]);
     (async () => {
       try {
-        const r = await fetch(`/api/pedido/${pedidoId}/concat/context`, { headers: { 'Cache-Control': 'no-cache' } });
+        const r = await fetch(`/api/pedido/${pedidoId}/concat/context`, { headers: buildHeaders() });
         if (!r.ok) throw new Error('Falha ao carregar candidatos.');
         setCtx(await r.json());
       } catch (e: any) {
         setError(e?.message || 'Erro ao buscar contexto.');
       }
     })();
-  }, [isOpen, pedidoId]);
+  }, [isOpen, pedidoId, token]);
 
   const totals = useMemo(() => {
     if (!ctx) return { base: 0, selectedSum: 0, combined: 0 };
@@ -58,7 +61,6 @@ export default function ConcatModal({
     return { base, selectedSum, combined: base + selectedSum };
   }, [ctx, selected]);
 
-  // Desabilita se base sem itens ou algum selecionado sem itens
   const invalidSelected = useMemo(() => {
     if (!ctx) return false;
     const byId = new Map(ctx.candidatos.map(c => [c.id, c]));
@@ -81,7 +83,7 @@ export default function ConcatModal({
     try {
       const r = await fetch(`/api/pedido/${pedidoId}/concat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildHeaders('application/json'),
         body: JSON.stringify({ includeIds: selected }),
       });
       const body = await r.json().catch(() => ({}));

@@ -29,15 +29,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const storedUser = localStorage.getItem('userData');
     if (storedToken) setToken(storedToken);
     if (storedUser) setUser(JSON.parse(storedUser));
+
+    async function validate() {
+      if (!storedToken) return;
+      try {
+        const r = await fetch('/api/ping', {
+          headers: { Authorization: `Bearer ${storedToken}` }
+        });
+        if (r.status === 401) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userData');
+          setToken(null);
+          setUser(null);
+        }
+      } catch {
+      }
+    }
+    validate();
     setIsLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
-    const data = await api.post<{ token: string; user: any }>('/auth/login', { email, senha: password }, { timeoutMs: 12000 });
-    localStorage.setItem('authToken', data.token);
-    localStorage.setItem('userData', JSON.stringify(data.user));
-    setToken(data.token);
-    setUser(data.user);
+    try {
+      const data = await api.post<{ token: string; user: any }>('/auth/login', { email, senha: password }, { timeoutMs: 12000 });
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('userData', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+    } catch (e: any) {
+      let message = 'Usuário ou senha incorreto.';
+
+      const fromObj = e?.data?.error || e?.response?.data?.error || e?.error;
+      if (fromObj && typeof fromObj === 'string') {
+        message = fromObj;
+      }
+
+      if (typeof e?.message === 'string') {
+        const match = e.message.match(/\{[\s\S]*\}$/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[0]);
+            if (parsed?.error && typeof parsed.error === 'string') {
+              message = parsed.error;
+            }
+          } catch {
+          }
+        }
+      }
+
+      if (!message || typeof message !== 'string') {
+        message = 'Usuário ou senha incorreto.';
+      }
+
+      throw new Error(message);
+    }
   };
 
   const register = async (primeiro_nome: string, ultimo_nome: string, email: string, password: string, genero: string, telefone: string) => {

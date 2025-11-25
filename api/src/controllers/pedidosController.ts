@@ -16,21 +16,21 @@ const HIST_INFLIGHT_THRESHOLD =
 let inflightPendentes = 0;
 let inflightHistorico = 0;
 
-function mapConcatRole(papel?: string | null): 'RESULT' | 'SOURCE' | null {
+function mapConcatRole(papel?: string | null): 'RESULTADO' | 'ORIGEM' | null {
   const v = String(papel ?? '').trim().toUpperCase();
-  if (v === 'RESULTADO') return 'RESULT';
-  if (v === 'ORIGEM') return 'SOURCE';
+  if (v === 'RESULTADO') return 'RESULTADO';
+  if (v === 'ORIGEM') return 'ORIGEM';
   return null;
 }
 
-function readUserScope(u: any): { perfil: 'ADMIN'|'APROVADOR'|'SOLICITANTE'; codSetor?: number; codUsuario?: number } {
+function readUserScope(u: any): { perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE'; codSetor?: number; codUsuario?: number } {
   const rawPerfil =
     u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
   const perfilUp = String(rawPerfil).trim().toUpperCase();
 
   const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? NaN);
-  let perfil: 'ADMIN'|'APROVADOR'|'SOLICITANTE';
-  if (['ADMIN','APROVADOR','SOLICITANTE'].includes(perfilUp)) {
+  let perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
+  if (['ADMIN', 'APROVADOR', 'SOLICITANTE'].includes(perfilUp)) {
     perfil = perfilUp as any;
   } else if (Number.isFinite(tipoNum)) {
     perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
@@ -74,12 +74,13 @@ export const listarPendentes = async (req: any, res: any) => {
             (u.PRIMEIRO_NOME || ' ' || NVL(u.ULTIMO_NOME,'')) AS SOLICITANTE,
             s.DESCRICAO                                       AS SETOR,
             NVL(p.QTD_ITENS, 0)                               AS QTD_ITENS,
-            NVL(p.VALOR_TOTAL, 0)                             AS VALOR_TOTAL
+            NVL(p.VALOR_TOTAL, 0)                             AS VALOR_TOTAL,
+            NVL(p.CONCAT_PAPEL,'NENHUM')                      AS CONCAT_PAPEL,
+            p.CONCAT_GRUPO_ID                                 AS CONCAT_GRUPO_ID
           FROM BRAMV_PEDIDOC p
           LEFT JOIN BRAMV_USUARIOS u ON u.CODUSUARIO = p.CODUSUARIO
           LEFT JOIN BRAMV_SETOR s    ON s.CODSETOR    = u.CODSETOR
           WHERE p.STATUS IN (5,3)
-            AND NVL(p.CONCAT_PAPEL,'NENHUM') <> 'ORIGEM'
             AND p.DATA >= TRUNC(SYSDATE) - :days
             ${restrictSetor ? 'AND u.CODSETOR = :userSetor' : ''}
           ORDER BY p.DATA DESC
@@ -89,12 +90,7 @@ export const listarPendentes = async (req: any, res: any) => {
       const binds: Record<string, any> = { days, maxrows };
       if (restrictSetor) binds.userSetor = codSetor;
 
-      const r = await connection.execute(
-        sql,
-        binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 200 }
-      );
-
+      const r = await connection.execute(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
       return (r.rows || []).map((p: any) => ({
         id: p.ID,
         data: p.DATA,
@@ -102,6 +98,8 @@ export const listarPendentes = async (req: any, res: any) => {
         unidadeAdmin: p.SETOR || 'N/A',
         qtdItens: Number(p.QTD_ITENS || 0),
         valor: Number(p.VALOR_TOTAL || 0),
+        concatRole: mapConcatRole(p.CONCAT_PAPEL),
+        concatGroupId: p.CONCAT_GRUPO_ID ?? null
       }));
     });
 

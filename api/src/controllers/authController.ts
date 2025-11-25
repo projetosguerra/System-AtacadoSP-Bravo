@@ -55,8 +55,7 @@ export const register = async (req: any, res: any) => {
         throw new Error('Não foi possível gerar um novo número de usuário.');
       }
       const row = maxCodResult.rows[0] as any;
-      const nextCodUsuario =
-        (row.NEXT_CODUSUARIO ?? row[0]) as number;
+      const nextCodUsuario = (row.NEXT_CODUSUARIO ?? row[0]) as number;
 
       await connection.execute(
         `INSERT INTO BRAMV_USUARIOS (
@@ -115,11 +114,19 @@ export const login = async (req: any, res: any) => {
       `;
       const result = await connection.execute(query, { email, codcli }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
 
-      if (!result.rows?.length) return res.status(401).json({ error: 'Credenciais inválidas.' });
+      const genericMessage = 'Usuário ou senha incorreto.';
+
+      if (!result.rows?.length) {
+        return res.status(401).json({ error: genericMessage });
+      }
 
       const dbUser: any = result.rows[0];
       const isPasswordValid = await bcrypt.compare(senha, dbUser.SENHA);
-      if (!isPasswordValid) return res.status(401).json({ error: 'Credenciais inválidas.' });
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: genericMessage });
+      }
+
+      const perfilStr = dbUser.TIPOUSUARIO === 1 ? 'Admin' : dbUser.TIPOUSUARIO === 2 ? 'Aprovador' : 'Solicitante';
 
       const userPayload = {
         codUsuario: dbUser.CODUSUARIO,
@@ -127,7 +134,7 @@ export const login = async (req: any, res: any) => {
         ultimoNome: dbUser.ULTIMO_NOME,
         email: dbUser.EMAIL,
         tipoUsuario: dbUser.TIPOUSUARIO,
-        perfil: dbUser.TIPOUSUARIO === 1 ? 'Admin' : dbUser.TIPOUSUARIO === 2 ? 'Aprovador' : 'Solicitante',
+        perfil: perfilStr,
         codSetor: dbUser.CODSETOR,
         setor: dbUser.SETOR_DESCRICAO || 'Não definido',
         genero: dbUser.GENERO || '',
@@ -137,8 +144,15 @@ export const login = async (req: any, res: any) => {
         ativo: true,
       };
 
+      // TOKEN COM CAMPOS AMPLIADOS (codSetor, perfil, codUsuario)
       const token = jwt.sign(
-        { id: userPayload.codUsuario, nome: userPayload.primeiroNome, tipoUsuario: userPayload.tipoUsuario },
+        {
+          codUsuario: userPayload.codUsuario,
+          nome: userPayload.primeiroNome,
+          tipoUsuario: userPayload.tipoUsuario,
+          codSetor: userPayload.codSetor,
+          perfil: userPayload.perfil
+        },
         process.env.JWT_SECRET!,
         { expiresIn: '8h' }
       );

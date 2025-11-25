@@ -163,7 +163,7 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
           title={`Pedido gerado por concatenação (grupo ${o.concatGroupId ?? o.id})`}>
-          Novo
+          Concatenado
         </span>
       );
     }
@@ -268,6 +268,7 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QTD Itens</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Concatenação</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">

@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import PendingOrdersTable from '../components/PendingOrdersTable';
-import FiltersButton from '../components/FiltersButton';
 import { KpiData, PedidoPendente } from '../types';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +16,6 @@ const ApprovalPanelPage = () => {
 
   const isAdmin = String(user?.perfil ?? '').toUpperCase() === 'ADMIN';
 
-  // Nome da unidade do usuário para fallback local (aprovador/solicitante)
   const userUnitName = useMemo(() => {
     const direct = String(user?.setor ?? '').trim();
     if (direct) return direct;
@@ -26,9 +24,7 @@ const ApprovalPanelPage = () => {
   }, [user?.setor, user?.codSetor, setores]);
 
   const [days, setDays] = useState<number>(30);
-  const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [selectedSetorId, setSelectedSetorId] = useState<string>('');
-
+  const [selectedSetorId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<PedidoPendente[]>(ctxPendentes || []);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +39,7 @@ const ApprovalPanelPage = () => {
       const resp = await fetch(`/api/pedidos/pendentes?${params.toString()}`, { headers });
       if (!resp.ok) throw new Error('Falha ao buscar pedidos pendentes');
       const data = await resp.json();
-      const map = new Map<string | number, PedidoPendente>();
-      for (const p of Array.isArray(data) ? data : []) {
-        if (!map.has((p as any)?.id)) map.set((p as any)?.id, p);
-      }
-      setList(Array.from(map.values()));
+      setList(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setError(e?.message || 'Erro ao carregar pendentes.');
       setList(ctxPendentes || []);
@@ -56,7 +48,7 @@ const ApprovalPanelPage = () => {
     }
   }
 
-  useEffect(() => { loadPendentes(days); }, [days]); // eslint-disable-line
+  useEffect(() => { loadPendentes(days); }, [days]);
 
   useEffect(() => {
     const onFocus = () => loadPendentes(days);
@@ -67,35 +59,32 @@ const ApprovalPanelPage = () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [days]); // eslint-disable-line
+  }, [days]);
 
   useEffect(() => {
     if ((location.state as any)?.forceRefresh) {
       const t = setTimeout(() => loadPendentes(days), 200);
       return () => clearTimeout(t);
     }
-  }, [location.state, days]); // eslint-disable-line
+  }, [location.state, days]);
 
-  // Escopo para ADMIN (filtro global de unidade) OU fallback para não-admin (filtrar por unidade do usuário)
   const scopedList = useMemo(() => {
     if (isAdmin) {
       if (!selectedSetorId) return list || [];
-      const setorLabel = (o: any) => String(o?.unidadeAdmin || '').trim();
-      return (list || []).filter(p => setorLabel(p) === selectedSetorId);
+      return (list || []).filter(p => (p.unidadeAdmin || '').trim() === selectedSetorId);
     }
-    // Não-admin: defesa em profundidade (mesmo se backend falhar)
     if (!userUnitName) return list || [];
-    return (list || []).filter(p => String((p as any)?.unidadeAdmin || '').trim() === userUnitName);
+    return (list || []).filter(p => (p.unidadeAdmin || '').trim() === userUnitName);
   }, [list, isAdmin, selectedSetorId, userUnitName]);
 
   const totalPedidos = scopedList.length;
   const totalValor = useMemo(
-    () => scopedList.reduce((sum, p) => sum + toNumber((p as any)?.valor), 0),
+    () => scopedList.reduce((sum, p) => sum + toNumber(p.valor), 0),
     [scopedList]
   );
   const novosHoje = useMemo(() => {
     return scopedList.filter(p => {
-      const d = new Date((p as any).data); const t = new Date();
+      const d = new Date(p.data); const t = new Date();
       return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
     }).length;
   }, [scopedList]);
@@ -107,7 +96,7 @@ const ApprovalPanelPage = () => {
     <div className="space-y-6 p-8 bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <h1 className="text-3xl font-bold text-gray-800">
-          {isAdmin ? 'Painel de Aprovação' : 'Meus Pedidos Pendentes'}
+          {isAdmin ? 'Painel de Aprovação' : 'Pedidos Pendentes'}
         </h1>
 
         <div className="flex items-center gap-3">
@@ -119,7 +108,7 @@ const ApprovalPanelPage = () => {
               onChange={(e) => setDays(Number(e.target.value))}
               disabled={loading || ctxLoading}
             >
-              <option value="30">Últimos 30 dias (recomendado)</option>
+              <option value="30">Últimos 30 dias</option>
               <option value="45">Últimos 45 dias</option>
             </select>
           </div>
@@ -128,28 +117,16 @@ const ApprovalPanelPage = () => {
             onClick={() => loadPendentes(days)}
             disabled={loading || ctxLoading}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-            title="Atualizar lista"
           >
             <RefreshCw className={`w-4 h-4 ${(loading || ctxLoading) ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
-
-          {isAdmin && (
-            <FiltersButton
-              showFilters={showFilters}
-              setShowFilters={setShowFilters}
-              selectedSetorId={selectedSetorId}
-              setSelectedSetorId={setSelectedSetorId}
-              setores={(setores || []) as any}
-              disabled={loading || ctxLoading}
-            />
-          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { title: 'Pedidos Pendentes', value: (loading || ctxLoading) ? '...' : totalPedidos, subtitle: isAdmin ? 'Global (com filtro opcional)' : 'Da sua unidade' },
+          { title: 'Pedidos Pendentes', value: (loading || ctxLoading) ? '...' : totalPedidos, subtitle: isAdmin ? 'Global' : 'Da sua unidade' },
           { title: 'Valor Total Pendente', value: (loading || ctxLoading) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor), subtitle: 'Soma' },
           { title: 'Pedidos Hoje', value: (loading || ctxLoading) ? '...' : novosHoje, subtitle: 'Últimas 24h' },
           { title: 'Ticket Médio', value: (loading || ctxLoading || totalPedidos === 0) ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValor / totalPedidos), subtitle: 'Média por pedido' },
@@ -164,7 +141,7 @@ const ApprovalPanelPage = () => {
             currentPage={page}
             itemsPerPage={10}
             onPageChange={setPage}
-            showUnitFilter={isAdmin} 
+            showUnitFilter={false} 
           />
         )}
       </div>

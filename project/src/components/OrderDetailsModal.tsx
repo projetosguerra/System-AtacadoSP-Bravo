@@ -3,6 +3,7 @@ import { X, AlertTriangle } from 'lucide-react';
 import { fetchPedidoDetalhe, fetchPedidoFinanceiro, fetchPedidoTransportadora } from '../api/pedidos';
 import { PedidoDetalhe } from '../types/pedidos';
 import PedidoTimeline from './PedidoTimeline';
+import { EdicaoResumo } from './EdicaoResumo';
 
 interface OrderDetailsModalProps {
   open: boolean;
@@ -156,13 +157,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 </div>
               )}
 
-              {/* Aprovação / aprovador (mantive seu bloco) */}
+              {/* Aprovação / aprovador */}
               {data.aprovador && (
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-800">Aprovador</h4>
                   <div className="text-sm text-gray-700">
                     <div>Aprovado por: <span className="font-medium">{data.aprovador.nome}</span> ({data.aprovador.email})</div>
-                    {/* se quiser, exiba perfil */}
                     {data.aprovador.perfil && <div className="text-xs text-gray-500">Perfil: {data.aprovador.perfil}</div>}
                   </div>
                 </div>
@@ -178,6 +178,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                   </div>
                 </div>
               )}
+
+              <EdicaoResumo eventos={data.eventos} />
 
               {/* Itens (mantive seu markup) */}
               <div className="space-y-3">

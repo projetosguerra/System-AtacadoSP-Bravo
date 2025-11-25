@@ -1,0 +1,1 @@
+export const PEDIDO_MIN_VALUE = 400;

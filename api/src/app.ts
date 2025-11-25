@@ -4,6 +4,7 @@ import compression from 'compression';
 import type { RequestHandler } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { authJwtMiddleware } from './middleware/authJwtMiddleware.js';
 import { loggingMiddleware } from './middleware/loggingMiddleware.js';
 import { cacheControlMiddleware } from './middleware/cacheControlMiddleware.js';
 import { timing } from './middleware/timing.js';
@@ -21,6 +22,7 @@ export function buildApp() {
   app.use(loggingMiddleware as RequestHandler);
   app.use('/api', cacheControlMiddleware as RequestHandler);
   app.use(timing as RequestHandler);
+  app.use(authJwtMiddleware as RequestHandler);
 
   const imgsDir = process.env.PROD_IMG_DIR;
   if (imgsDir && fs.existsSync(imgsDir)) {

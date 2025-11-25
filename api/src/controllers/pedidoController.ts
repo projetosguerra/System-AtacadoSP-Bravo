@@ -327,7 +327,7 @@ export const obterPedido = async (req: any, res: any) => {
         qtdItens: h.QTD_ITENS ?? qtdItensCalc,
         valorTotal: h.VALOR_TOTAL ?? valorTotalCalc,
         itens,
-        concatRole: papel === 'RESULTADO' ? 'RESULTADO' : papel === 'ORIGEM' ? 'SOURCE' : null,
+        concatRole: papel === 'RESULTADO' ? 'RESULTADO' : papel === 'ORIGEM' ? 'ORIGEM' : null,
         concatGroupId: grupoId ?? null,
         concatOrigens,
         concatResultado,
@@ -764,3 +764,353 @@ function safeParseJson(detalheJson: any): any | null {
     return null;
   }
 }
+
+function readUserScopeLoose(u: any): { perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE'; codSetor?: number; codUsuario?: number } {
+  const rawPerfil =
+    u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
+  const perfilUp = String(rawPerfil).trim().toUpperCase();
+  const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? NaN);
+
+  let perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
+  if (['ADMIN', 'APROVADOR', 'SOLICITANTE'].includes(perfilUp)) {
+    perfil = perfilUp as any;
+  } else if (Number.isFinite(tipoNum)) {
+    perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
+  } else {
+    // fallback: melhor ser APROVADOR para não dar acesso indevido de Admin
+    perfil = 'APROVADOR';
+  }
+
+  const codSetorRaw =
+    u?.codSetor ?? u?.codsetor ?? u?.CODSETOR ?? u?.setorId ?? u?.COD_SETOR;
+  const codSetor = Number(codSetorRaw);
+  const codUsuarioRaw = u?.codUsuario ?? u?.CODUSUARIO ?? u?.userId;
+  const codUsuario = Number(codUsuarioRaw);
+
+  const scope: any = { perfil };
+  if (Number.isFinite(codSetor)) scope.codSetor = codSetor;
+  if (Number.isFinite(codUsuario)) scope.codUsuario = codUsuario;
+  return scope;
+}
+
+export const editarItensPedido = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ error: 'Token ausente ou inválido.' });
+  
+  const num = Number(req.params.id);
+  if (!Number.isFinite(num)) return res.status(400).json({ error: 'ID inválido.' });
+
+  const motivo = String(req.body?.motivo ?? '').trim();
+  const itensPayload = Array.isArray(req.body?.itens) ? req.body.itens : [];
+
+  if (motivo.length < 5) {
+    return res.status(400).json({ error: 'Motivo da edição deve ter pelo menos 5 caracteres.' });
+  }
+  if (itensPayload.length === 0) {
+    return res.status(400).json({ error: 'Lista de itens não pode ser vazia.' });
+  }
+
+  const normalizados = itensPayload
+    .map((it: any) => ({
+      codProd: Number(it.codProd),
+      qt: Number(it.qt)
+    }))
+    .filter((it: { codProd: unknown; qt: unknown; }) => Number.isFinite(it.codProd) && Number.isFinite(it.qt) && (it.qt as number) >= 1);
+
+  if (normalizados.length === 0) {
+    return res.status(400).json({ error: 'Nenhum item válido após normalização.' });
+  }
+
+  // Helper tolerant
+  function readUserScopeLoose(u: any) {
+    const rawPerfil =
+      u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
+    const perfilUp = String(rawPerfil).trim().toUpperCase();
+    const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? u?.TIPOUSUARIO ?? NaN);
+
+    let perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
+    if (['ADMIN','APROVADOR','SOLICITANTE'].includes(perfilUp)) {
+      perfil = perfilUp as any;
+    } else if (Number.isFinite(tipoNum)) {
+      perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
+    } else {
+      perfil = 'APROVADOR'; // fallback seguro
+    }
+
+    const codSetorRaw =
+      u?.codSetor ?? u?.codsetor ?? u?.CODSETOR ?? u?.setorId ?? u?.COD_SETOR;
+    const codSetor = Number(codSetorRaw);
+    const codUsuarioCandidates = [
+      u?.codUsuario, u?.CODUSUARIO, u?.userId, u?.id, u?.ID, u?.usuarioId
+    ].map(v => Number(v)).filter(v => Number.isFinite(v));
+    const codUsuario = codUsuarioCandidates.length ? codUsuarioCandidates[0] : undefined;
+
+    return {
+      perfil,
+      codUsuario,
+      codSetor: Number.isFinite(codSetor) ? codSetor : undefined
+    };
+  }
+
+  const scope = readUserScopeLoose(req.user || {});
+  let perfil = scope.perfil;
+  let codSetorEditor = scope.codSetor;
+  let usuarioEditorId = scope.codUsuario;
+
+  const ignoreSetor = String(process.env.EDIT_PEDIDO_IGNORE_SETOR || '') === '1';
+  const debug = String(process.env.DEBUG_EDIT_PEDIDO || '') === '1';
+
+  try {
+    const payload = await withConnection(async (connection) => {
+      // Lock cabeçalho
+      const hdrR = await connection.execute(
+        `SELECT p.STATUS,
+                u.CODSETOR   AS SETOR_SOLICITANTE,
+                u.CODUSUARIO AS SOLICITANTE_ID,
+                NVL(p.CONCAT_PAPEL,'') AS CONCAT_PAPEL
+           FROM BRAMV_PEDIDOC p
+           JOIN BRAMV_USUARIOS u ON u.CODUSUARIO = p.CODUSUARIO
+          WHERE p.NUMPEDRCA = :id
+          FOR UPDATE`,
+        { id: num },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const hdr: any = hdrR.rows?.[0];
+      if (!hdr) throw new Error('Pedido não encontrado.');
+
+      const statusAtual = Number(hdr.STATUS);
+      const solicitanteSetor = Number(hdr.SETOR_SOLICITANTE);
+      const concatPapel = String(hdr.CONCAT_PAPEL).toUpperCase();
+      const solicitanteId = Number(hdr.SOLICITANTE_ID);
+
+      if (![5, 3].includes(statusAtual)) {
+        const err: any = new Error('Pedido não está em estado editável.');
+        err.statusCode = 409;
+        throw err;
+      }
+
+      // Fallback: buscar dados do aprovador se codSetor ou codUsuario faltam
+      if (!Number.isFinite(usuarioEditorId) || !Number.isFinite(codSetorEditor)) {
+        // Tentar pegar codUsuario de req.user.id se não definido
+        if (!Number.isFinite(usuarioEditorId)) {
+          const idCandidates = [
+            req.user?.codUsuario, req.user?.CODUSUARIO, req.user?.id,
+            req.user?.ID, req.user?.userId
+          ].map(n => Number(n)).filter(n => Number.isFinite(n));
+          if (idCandidates.length) usuarioEditorId = idCandidates[0];
+        }
+
+        if (Number.isFinite(usuarioEditorId)) {
+          const uRowR = await connection.execute(
+            `SELECT CODSETOR, TIPOUSUARIO
+               FROM BRAMV_USUARIOS
+              WHERE CODUSUARIO = :u`,
+            { u: usuarioEditorId },
+            { outFormat: oracledb.OUT_FORMAT_OBJECT }
+          );
+            const uRow: any = uRowR.rows?.[0];
+          if (uRow) {
+            const fetchedSetor = Number(uRow.CODSETOR);
+            if (Number.isFinite(fetchedSetor)) codSetorEditor = fetchedSetor;
+            const fetchedTipo = Number(uRow.TIPOUSUARIO);
+            perfil = (fetchedTipo === 1 ? 'ADMIN' : fetchedTipo === 2 ? 'APROVADOR' : 'SOLICITANTE');
+          }
+        }
+      }
+
+      // Permissão
+      if (!ignoreSetor) {
+        if (perfil !== 'ADMIN') {
+          if (perfil !== 'APROVADOR') {
+            const err: any = new Error('Permissão negada: perfil não é aprovador.');
+            err.statusCode = 403;
+            throw err;
+          }
+          if (!Number.isFinite(codSetorEditor)) {
+            const err: any = new Error('Permissão negada: aprovador sem setor definido.');
+            err.statusCode = 403;
+            throw err;
+          }
+          if (codSetorEditor !== solicitanteSetor) {
+            const err: any = new Error(`Permissão negada: setor aprovador (${codSetorEditor}) difere do solicitante (${solicitanteSetor}).`);
+            err.statusCode = 403;
+            throw err;
+          }
+        }
+      }
+
+      // Bloqueio opcional de concatenados (ajuste conforme regra)
+      if (['RESULTADO','ORIGEM'].includes(concatPapel)) {
+        const err: any = new Error('Pedido concatenado não pode ser editado.');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      // Carrega itens atuais
+      const itensAtuaisR = await connection.execute(
+        `SELECT CODPROD, QT, PVENDA
+           FROM BRAMV_PEDIDOI
+          WHERE NUMPEDRCA = :id
+          ORDER BY CODPROD`,
+        { id: num },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const itensAtuais = (itensAtuaisR.rows || []).map((r: any) => ({
+        codProd: Number(r.CODPROD),
+        qt: Number(r.QT),
+        pvenda: Number(r.PVENDA)
+      }));
+
+      // Agregar duplicados
+      const agg = new Map<number, number>();
+      for (const it of normalizados) {
+        agg.set(it.codProd, (agg.get(it.codProd) || 0) + it.qt);
+      }
+      const itensNovos = Array.from(agg.entries()).map(([codProd, qt]) => ({ codProd, qt }));
+
+      async function resolvePreco(codProd: number): Promise<number> {
+        const found = itensAtuais.find(i => i.codProd === codProd);
+        if (found) return found.pvenda;
+        const pr = await connection.execute(
+          `SELECT MIN(NVL(I.PTABELA,0)) AS PRECO
+             FROM PCCONTRATOI I
+             JOIN PCCONTRATO C ON C.CODCONTRATO = I.CODCONTRATO
+             JOIN PCCLIENT CLI ON CLI.CODCLI = C.CODCLI
+            WHERE CLI.CODCLI = :codcli
+              AND I.CODPROD = :prod
+              AND TRUNC(C.DTVENCIMENTO) >= TRUNC(SYSDATE)`,
+          { codcli: Number(process.env.CODCLI ?? 27995), prod: codProd },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        const row: any = pr.rows?.[0];
+        return Number(row?.PRECO || 0);
+      }
+
+      type Diff = {
+        codProd: number;
+        acao: 'ADICIONADO' | 'REMOVIDO' | 'ALTERADO';
+        quantidadeAnterior?: number;
+        quantidadeNova: number;
+        precoUnit: number;
+      };
+
+      const diffs: Diff[] = [];
+      const mapAtuais = new Map(itensAtuais.map(i => [i.codProd, i]));
+      const mapNovos = new Map(itensNovos.map(i => [i.codProd, i.qt]));
+
+      for (const old of itensAtuais) {
+        if (!mapNovos.has(old.codProd)) {
+          diffs.push({
+            codProd: old.codProd,
+            acao: 'REMOVIDO',
+            quantidadeAnterior: old.qt,
+            quantidadeNova: 0,
+            precoUnit: old.pvenda
+          });
+        }
+      }
+      for (const novo of itensNovos) {
+        const old = mapAtuais.get(novo.codProd);
+        const preco = await resolvePreco(novo.codProd);
+        if (!old) {
+          diffs.push({
+            codProd: novo.codProd,
+            acao: 'ADICIONADO',
+            quantidadeAnterior: 0,
+            quantidadeNova: novo.qt,
+            precoUnit: preco
+          });
+        } else if (old.qt !== novo.qt) {
+          diffs.push({
+            codProd: novo.codProd,
+            acao: 'ALTERADO',
+            quantidadeAnterior: old.qt,
+            quantidadeNova: novo.qt,
+            precoUnit: preco
+          });
+        }
+      }
+
+      await connection.execute(
+        `DELETE FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id`,
+        { id: num }
+      );
+
+      const rowsInsert = await Promise.all(
+        itensNovos.map(async it => ({
+          id: num,
+          codProd: it.codProd,
+          qt: it.qt,
+          pvenda: await resolvePreco(it.codProd)
+        }))
+      );
+
+      if (rowsInsert.length) {
+        await connection.executeMany(
+          `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA)
+           VALUES (:id, :codProd, :qt, :pvenda)`,
+          rowsInsert
+        );
+      }
+
+      const totalNovoR = await connection.execute(
+        `SELECT NVL(SUM(QT * PVENDA),0) AS TOTAL FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id`,
+        { id: num },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const valorNovo = Number((totalNovoR.rows?.[0] as any)?.TOTAL || 0);
+      const valorAnterior = itensAtuais.reduce((s, it) => s + it.qt * it.pvenda, 0);
+      const qtdItensNova = itensNovos.length;
+
+      await connection.execute(
+        `UPDATE BRAMV_PEDIDOC
+            SET VALOR_TOTAL = :vNovo,
+                QTD_ITENS   = :qNovo
+          WHERE NUMPEDRCA = :id`,
+        { vNovo: valorNovo, qNovo: qtdItensNova, id: num }
+      );
+
+      const eventoDetalhe = {
+        motivo,
+        autorCodUsuario: usuarioEditorId,
+        solicitanteCodUsuario: solicitanteId,
+        totalAnterior: valorAnterior,
+        totalNovo: valorNovo,
+        alteracoes: diffs
+      };
+      await connection.execute(
+        `INSERT INTO BRAMV_PEDIDO_EVENTO (NUMPEDRCA, TIPO, USUARIO_ID, DETALHE_JSON)
+         VALUES (:n, 'EDITACAO_PEDIDO', :u, :det)`,
+        { n: num, u: usuarioEditorId, det: JSON.stringify(eventoDetalhe) }
+      );
+
+      await connection.commit();
+
+      return {
+        id: num,
+        status: statusAtual,
+        valorAnterior,
+        valorNovo,
+        qtdItensAnterior: itensAtuais.length,
+        qtdItensNova,
+        diffs,
+        setorSolicitante: solicitanteSetor,
+        setorEditor: codSetorEditor,
+        perfilEditor: perfil,
+        usuarioEditorId
+      };
+    });
+
+    if (debug) {
+      res.setHeader('X-Debug-Edit-Info', JSON.stringify(payload));
+    }
+
+    return res.status(200).json({ success: true, ...payload });
+  } catch (err: any) {
+    const statusCode = err.statusCode || 500;
+    if (debug) {
+      res.setHeader('X-Debug-Edit-Error', err.message || 'erro');
+    }
+    console.error('[editarItensPedido] erro:', err);
+    return res.status(statusCode).json({ error: err.message || 'Erro ao editar itens do pedido.' });
+  }
+};

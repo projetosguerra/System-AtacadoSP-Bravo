@@ -25,7 +25,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
             className="cursor-pointer"
             onClick={onLogoClick}
           >
-            <img src={Logo} alt="Ataercio Comercio Inteligente" className="h-16 w-auto" />
+            <img src={Logo} alt="Atacado São Paulo" className="h-16 w-auto" />
           </div>
 
           {alternativeAction && (

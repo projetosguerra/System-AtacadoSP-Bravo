@@ -74,6 +74,8 @@ export interface PedidoPendente {
   qtdItens: number;
   valor: number;
   status?: number;
+  concatRole?: ConcatRole;
+  concatGroupId?: number | null;
 }
 
 export interface HistoricalOrder {

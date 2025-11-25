@@ -7,16 +7,19 @@ import {
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, XCircle, CheckCircle } from 'lucide-react';
-import { LegacyOrderDetail } from '../types';
+import { LegacyOrderDetail } from '../types/index';
 import RejectModal from '../components/RejectModal';
 import { useData } from '../context/DataContext';
 import ConcatModal from '../components/ConcatModal';
+import { useAuth } from '../context/AuthContext';
+import { PEDIDO_MIN_VALUE } from '../config/constants';
 
-const MIN_VALUE_FALLBACK = 200;
+const MIN_VALUE_FALLBACK = PEDIDO_MIN_VALUE;
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
+
 function statusBadge(status: number) {
   switch (status) {
     case 1: return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">Aprovado</span>;
@@ -32,6 +35,14 @@ const OrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { refetchAllData } = useData();
+  const { token } = useAuth();
+
+  function buildHeaders(contentType?: string): Record<string,string> {
+    const h: Record<string,string> = {};
+    if (contentType) h['Content-Type'] = contentType;
+    if (token) h.Authorization = `Bearer ${token}`;
+    return h;
+  }
 
   const [order, setOrder] = useState<LegacyOrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,7 +59,6 @@ const OrderDetailPage = () => {
   const abortRef = useRef<AbortController | null>(null);
   const committedRef = useRef(false);
 
-  // Normalization helpers: support different backend shapes
   const getQty = (item: any): number => {
     return Number(item.quantidade ?? item.qt ?? item.QTD ?? item.qty ?? 0) || 0;
   };
@@ -74,17 +84,15 @@ const OrderDetailPage = () => {
 
   const updateStatusAPI = useCallback(
     async (newStatus: number, conditionStatus?: number, motivo?: string) => {
-      const resp = await fetch(`/api/pedido/${id}/status`, {
+      return fetch(`/api/pedido/${id}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newStatus, conditionStatus, motivo }),
+        headers: buildHeaders('application/json'),
+        body: JSON.stringify({ newStatus, conditionStatus, motivo })
       });
-      return resp;
     },
-    [id]
+    [id, token]
   );
 
-  // Lock 5->3 ao entrar (mantive lógica sua, mas usei rota analise)
   useEffect(() => {
     let mounted = true;
     const fetchOrder = async () => {
@@ -92,16 +100,14 @@ const OrderDetailPage = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // Primeiro tentar buscar (evita confusão se pedido ainda não existe)
         try {
           abortRef.current?.abort();
-        } catch {}
+        } catch { }
         abortRef.current = new AbortController();
         const timeout = setTimeout(() => abortRef.current?.abort(), 12_000);
         const r1 = await fetch(`/api/pedido/${id}`, { signal: abortRef.current.signal });
         clearTimeout(timeout);
         if (!r1.ok) {
-          // Se não existir, tentar rota de análise (compatibilidade)
           const r2 = await fetch(`/api/pedido/${id}`, { signal: abortRef.current.signal });
           if (!r2.ok) throw new Error('Pedido não encontrado.');
           const data2 = await r2.json();
@@ -109,7 +115,6 @@ const OrderDetailPage = () => {
           return;
         }
         const data = await r1.json();
-        // se pedido existe, tente travar apenas se status for 5
         if (data?.status === 5) {
           const lockResp = await updateStatusAPI(3, 5);
           if (!lockResp.ok) {
@@ -120,7 +125,7 @@ const OrderDetailPage = () => {
             throw new Error('Falha ao trancar pedido para análise.');
           }
           // refetch after lock
-          const after = await fetch(`/api/pedido/${id}`);
+          const after = await fetch(`/api/pedido/${id}`, { headers: buildHeaders() });
           if (!after.ok) throw new Error('Pedido não encontrado após lock.');
           const dataAfter = await after.json();
           if (mounted) setOrder(dataAfter);
@@ -142,22 +147,19 @@ const OrderDetailPage = () => {
     return () => {
       mounted = false;
       if (order?.status === 3 && !committedRef.current) {
-        // tenta reverter o lock (rota analise)
-        updateStatusAPI(5, 3).catch(() => {});
+        updateStatusAPI(5, 3).catch(() => { });
       }
-      try { abortRef.current?.abort(); } catch {}
+      try { abortRef.current?.abort(); } catch { }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  // Contexto de concat sempre (5 ou 3) — mantive sua rota de análise
+  }, [id, token]);
+  
   useEffect(() => {
     let active = true;
     async function loadContext() {
       if (!id) return;
       setContextError(null);
       try {
-        const r = await fetch(`/api/pedido/${id}/concat/context`, { headers: { 'Cache-Control': 'no-cache' } });
+        const r = await fetch(`/api/pedido/${id}/concat/context`, { headers: buildHeaders() });
         if (!r.ok) return;
         const data = await r.json();
         if (!active) return;
@@ -172,9 +174,8 @@ const OrderDetailPage = () => {
     }
     loadContext();
     return () => { active = false; };
-  }, [id, totalValue]);
+  }, [id, totalValue, token]);
 
-  // unlock ao sair da página/aba
   useEffect(() => {
     const unlock = () => {
       if (!id) return;
@@ -183,7 +184,7 @@ const OrderDetailPage = () => {
         const payload = new Blob([JSON.stringify({})], { type: 'application/json' });
         (navigator as any).sendBeacon?.(`/api/pedido/${id}/unlock`, payload);
       } catch {
-        fetch(`/api/pedido/${id}/unlock`, { method: 'POST', keepalive: true }).catch(() => {});
+        fetch(`/api/pedido/${id}/unlock`, { method: 'POST', keepalive: true }).catch(() => { });
       }
     };
     const onPageHide = () => unlock();
@@ -201,7 +202,7 @@ const OrderDetailPage = () => {
   const handleBack = async () => {
     try {
       await fetch(`/api/pedido/${id}/unlock`, { method: 'POST' });
-    } catch {}
+    } catch { }
     navigate('/painel-aprovacao', { state: { forceRefresh: true } });
   };
 
@@ -216,7 +217,7 @@ const OrderDetailPage = () => {
     try {
       const res = await fetch(`/api/pedido/${order.id}/aprovar`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...buildHeaders() },
         body: JSON.stringify({ codFilial: '1', frete: 0 })
       });
       const body = await res.json().catch(() => ({}));
@@ -266,8 +267,8 @@ const OrderDetailPage = () => {
   const canConcat =
     (order.status === 5 || order.status === 3) &&
     belowMin &&
-    (order as any).concatRole !== 'RESULT' &&
-    (order as any).concatRole !== 'SOURCE';
+    (order as any).concatRole !== 'RESULTADO' &&
+    (order as any).concatRole !== 'ORIGEM';
 
   return (
     <div className="p-8 space-y-6">
@@ -279,12 +280,12 @@ const OrderDetailPage = () => {
         </div>
         {(order as any)?.concatRole && (
           <div>
-            {(order as any).concatRole === 'RESULT' && (
+            {(order as any).concatRole === 'RESULTADO' && (
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                 Pedido Concatenado (Novo) • Grupo {(order as any).concatGroupId}
               </span>
             )}
-            {(order as any).concatRole === 'SOURCE' && (
+            {(order as any).concatRole === 'ORIGEM' && (
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
                 Origem de Concatenação • Grupo {(order as any).concatGroupId}
               </span>
@@ -319,6 +320,7 @@ const OrderDetailPage = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Produto</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Código</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Qtd.</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Un.</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Subtotal</th>
@@ -331,7 +333,13 @@ const OrderDetailPage = () => {
               const subtotal = +(qty * price);
               return (
                 <tr key={getIdKey(item, idx)}>
-                  <td className="px-6 py-4">{item.nome}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <img src={item.imgUrl} alt={item.nome} className="w-12 h-12 rounded object-cover" />
+                      <span>{item.nome}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">{item.codProd}</td>
                   <td className="px-6 py-4">{qty} {getUnit(item)}</td>
                   <td className="px-6 py-4">{formatCurrency(price)}</td>
                   <td className="px-6 py-4 font-semibold">
@@ -343,12 +351,22 @@ const OrderDetailPage = () => {
           </tbody>
           <tfoot className="bg-gray-100 font-bold">
             <tr>
-              <td colSpan={3} className="px-6 py-4 text-right">VALOR TOTAL:</td>
+              <td colSpan={4} className="px-6 py-4 text-right">VALOR TOTAL:</td>
               <td className="px-6 py-4 text-left text-xl">{formatCurrency(totalValue)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
+
+      {/* Botão Editar se em análise ou pendente */}
+      {(order.status === 5 || order.status === 3) && (
+        <button
+          onClick={() => navigate(`/pedido/${order.id}/editar`)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Editar Pedido
+        </button>
+      )}
 
       {(order.status === 5 || order.status === 3) && (
         <div className="bg-white p-4 rounded-lg border text-sm text-gray-700 flex flex-col gap-1">

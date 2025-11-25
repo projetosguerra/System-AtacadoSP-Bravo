@@ -9,6 +9,7 @@ import CartPage from '../pages/CartPage.tsx';
 import OrderDetailPage from '../pages/OrderDetailPage.tsx';
 import AllOrdersPage from '../pages/AllOrdersPage.tsx';
 import ProductDetailsPage from '../pages/ProductDetailsPage.tsx';
+import EditOrderPage from '../pages/EditOrderPage.tsx';
 
 const AppRoutes = () => {
   return (
@@ -24,6 +25,7 @@ const AppRoutes = () => {
         <Route path="/pedido/:id" element={<OrderDetailPage />} />
         <Route path="*" element={<DashboardPage />} />
         <Route path="/produtos/:id" element={<ProductDetailsPage />}></Route>
+        <Route path="/pedido/:id/editar" element={<EditOrderPage />}></Route>
       </Routes>
     </Layout>
   );
