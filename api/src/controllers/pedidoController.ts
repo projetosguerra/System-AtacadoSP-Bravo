@@ -151,6 +151,24 @@ async function readClobSafe(val: any): Promise<string | null> {
   }
 }
 
+async function clobToString(val: any): Promise<string | null> {
+  if (val == null) return null;
+  if (typeof val === 'string') return val;
+  if (Buffer.isBuffer(val)) return val.toString('utf8');
+  if (typeof val === 'object' && typeof (val as any).on === 'function') {
+    return await new Promise((resolve, reject) => {
+      let out = '';
+      try {
+        (val as any).setEncoding?.('utf8');
+        (val as any).on('data', (c: any) => out += c);
+        (val as any).on('end', () => resolve(out));
+        (val as any).on('error', reject);
+      } catch (err) { reject(err); }
+    });
+  }
+  return String(val);
+}
+
 export const obterPedido = async (req: any, res: any) => {
   const { id } = req.params;
   const num = Number(id);
@@ -301,6 +319,30 @@ export const obterPedido = async (req: any, res: any) => {
         }
       }
 
+      let contesteResumo: any = null;
+      try {
+        const contR = await connection.execute(
+          `SELECT ID, STATUS, JUSTIFICATIVA, MOTIVO_REPROVACAO, PARECER, DATA_CRIACAO, DATA_ANALISE
+             FROM BRAMV_CONTESTE
+            WHERE NUMPEDRCA = :id
+            ORDER BY DATA_CRIACAO DESC, ID DESC`,
+          { id: num },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 5 }
+        );
+        const row: any = contR.rows?.[0];
+        if (row) {
+          contesteResumo = {
+            id: row.ID,
+            status: row.STATUS,
+            justificativa: await clobToString(row.JUSTIFICATIVA),
+            motivoReprovacao: row.MOTIVO_REPROVACAO, // VARCHAR2 já é string
+            parecer: await clobToString(row.PARECER),
+            dataCriacao: row.DATA_CRIACAO,
+            dataAnalise: row.DATA_ANALISE
+          };
+        }
+      } catch { /* ignora erros */ }
+
       const aprovador = h.APROVADOR_ID ? {
         id: h.APROVADOR_ID,
         nome: h.APROVADOR_NOME,
@@ -310,6 +352,16 @@ export const obterPedido = async (req: any, res: any) => {
 
       const status = Number(h.STATUS);
       const editavel = [5, 3].includes(status);
+
+      let contesteStatus: number | null = null;
+      try {
+        const csR = await connection.execute(
+          `SELECT CONTESTE_STATUS FROM BRAMV_PEDIDOC WHERE NUMPEDRCA = :id`,
+          { id: num },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        contesteStatus = Number((csR.rows?.[0] as any)?.CONTESTE_STATUS ?? 0);
+      } catch { }
 
       return {
         id: h.NUMPEDRCA,
@@ -333,7 +385,10 @@ export const obterPedido = async (req: any, res: any) => {
         concatResultado,
         aprovador,
         eventos,
-        editavel
+        editavel,
+        contesteStatus: contesteStatus && [1, 2, 3, 4, 9].includes(contesteStatus) ? contesteStatus : null,
+        reprovacaoMotivo,
+        contesteResumo
       };
     });
 
@@ -795,7 +850,7 @@ function readUserScopeLoose(u: any): { perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITA
 
 export const editarItensPedido = async (req: any, res: any) => {
   if (!req.user) return res.status(401).json({ error: 'Token ausente ou inválido.' });
-  
+
   const num = Number(req.params.id);
   if (!Number.isFinite(num)) return res.status(400).json({ error: 'ID inválido.' });
 
@@ -827,7 +882,7 @@ export const editarItensPedido = async (req: any, res: any) => {
     const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? u?.TIPOUSUARIO ?? NaN);
 
     let perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
-    if (['ADMIN','APROVADOR','SOLICITANTE'].includes(perfilUp)) {
+    if (['ADMIN', 'APROVADOR', 'SOLICITANTE'].includes(perfilUp)) {
       perfil = perfilUp as any;
     } else if (Number.isFinite(tipoNum)) {
       perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
@@ -903,7 +958,7 @@ export const editarItensPedido = async (req: any, res: any) => {
             { u: usuarioEditorId },
             { outFormat: oracledb.OUT_FORMAT_OBJECT }
           );
-            const uRow: any = uRowR.rows?.[0];
+          const uRow: any = uRowR.rows?.[0];
           if (uRow) {
             const fetchedSetor = Number(uRow.CODSETOR);
             if (Number.isFinite(fetchedSetor)) codSetorEditor = fetchedSetor;
@@ -933,7 +988,7 @@ export const editarItensPedido = async (req: any, res: any) => {
         }
       }
 
-      if (['RESULTADO','ORIGEM'].includes(concatPapel)) {
+      if (['RESULTADO', 'ORIGEM'].includes(concatPapel)) {
         const err: any = new Error('Pedido concatenado não pode ser editado.');
         err.statusCode = 403;
         throw err;

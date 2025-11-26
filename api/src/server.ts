@@ -12,6 +12,8 @@ console.log('--- [FASE 1 de 4] Início do arquivo server.ts ---');
 
 const DRIVER_MODE = String(process.env.ORACLEDB_DRIVER_MODE || 'thin').toLowerCase();
 
+oracledb.fetchAsString = [ oracledb.CLOB ];
+
 if (DRIVER_MODE === 'thick') {
   try {
     const libDir = process.env.ORACLE_CLIENT_LIB_DIR;

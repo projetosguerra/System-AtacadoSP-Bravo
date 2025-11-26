@@ -4,6 +4,10 @@ import { fetchPedidoDetalhe, fetchPedidoFinanceiro, fetchPedidoTransportadora } 
 import { PedidoDetalhe } from '../types/pedidos';
 import PedidoTimeline from './PedidoTimeline';
 import { EdicaoResumo } from './EdicaoResumo';
+import ContestModal from './ContestModal';
+import ContestReviewPanel from './ContestReviewPanel';
+import { fetchContestes } from '../api/conteste';
+import { useAuth } from '../context/AuthContext';
 
 interface OrderDetailsModalProps {
   open: boolean;
@@ -32,7 +36,6 @@ function formatCurrency(v?: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
 }
 
-// Helper para resolver URL de imagem dos itens do pedido
 const isPlaceholder = (u?: string) => !!u && /placehold|placeholder|text=Produto/i.test(u);
 const buildPedidoImgUrl = (item: any) => {
   const original = item?.imgUrl as string | undefined;
@@ -42,20 +45,51 @@ const buildPedidoImgUrl = (item: any) => {
 };
 const onImgError = (e: React.SyntheticEvent<HTMLImageElement, Event>, item: any) => {
   const el = e.currentTarget;
-  // Evita loop infinito
   if (el.dataset.fallbackDone === '1') return;
   el.dataset.fallbackDone = '1';
-  // Tenta com codigoAuxiliar se existir, senão usa um placeholder visual
   const altCode = item?.codigoAuxiliar ?? item?.codProd;
   el.src = altCode ? `/api/media/produtos/${altCode}.JPG` : `https://placehold.co/56x56?text=${encodeURIComponent('Produto')}`;
 };
 
+type ContesteResumo = {
+  id: number;
+  status: number;
+  justificativa: string;
+  dataCriacao: string;
+  motivoReprovacao?: string | null;
+  parecer?: string | null;
+  dataAnalise?: string | null;
+};
+
+const contesteStatusLabel: Record<number, string> = {
+  1: 'Conteste Aberto',
+  2: 'Conteste em Análise',
+  3: 'Conteste Deferido',
+  4: 'Conteste Indeferido',
+  9: 'Conteste Cancelado'
+};
+
+const badgeClassByContesteStatus: Record<number, string> = {
+  1: 'bg-yellow-100 text-yellow-800',
+  2: 'bg-blue-100 text-blue-800',
+  3: 'bg-green-100 text-green-800',
+  4: 'bg-red-100 text-red-800',
+  9: 'bg-gray-200 text-gray-700'
+};
+
+
 const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, onClose }) => {
+  const { user, token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [data, setData] = useState<PedidoDetalhe | null>(null);
   const [financeiro, setFinanceiro] = useState<any | null>(null);
   const [transportadora, setTransportadora] = useState<any | null>(null);
+  const [contestOpen, setContestOpen] = useState(false);
+
+  const [, setContestLoading] = useState(false);
+  const [, setContestError] = useState<string | null>(null);
+  const [ultimoConteste, setUltimoConteste] = useState<ContesteResumo | null>(null);
 
   useEffect(() => {
     if (!open || pedidoId == null) {
@@ -107,6 +141,42 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
     };
   }, [open, pedidoId]);
 
+  useEffect(() => {
+    if (!open || !data || data.status !== 2) {
+      setUltimoConteste(null);
+      setContestError(null);
+      return;
+    }
+    const ac3 = new AbortController();
+    setContestLoading(true);
+    setContestError(null);
+    fetchContestes(data.id, token ?? undefined, ac3.signal)
+      .then(list => {
+        const first = list && list.length ? list[0] : null;
+        if (first) {
+          setUltimoConteste({
+            id: first.id,
+            status: first.status,
+            justificativa: first.justificativa,
+            dataCriacao: first.dataCriacao,
+            motivoReprovacao: first.motivoReprovacao,
+            parecer: first.parecer,
+            dataAnalise: first.dataAnalise || null
+          });
+        } else {
+          setUltimoConteste(null);
+        }
+      })
+      .catch(err => {
+        if (!ac3.signal.aborted) {
+          setContestError(err?.message || 'Falha ao carregar conteste.');
+          setUltimoConteste(null);
+        }
+      })
+      .finally(() => { if (!ac3.signal.aborted) setContestLoading(false); });
+    return () => ac3.abort();
+  }, [open, data]);
+
   const somaLocal = useMemo(() => {
     if (!data?.itens) return 0;
     return (data.itens as any[]).reduce((sum, it) => sum + Number(it.subtotal || 0), 0);
@@ -117,20 +187,63 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   const dt = formatDateTime(data?.data);
   const statusText = data?.statusLabel || (data ? statusLabelFallback[data.status] : '');
   const divergencia = data && Math.abs(Number(data.valorTotal) - somaLocal) > 0.009;
+  
+
+  const solicitanteId = data?.solicitante?.id;
+  const usuarioLogadoId =
+  (user as any)?.codUsuario ??
+  (user as any)?.CODUSUARIO ??
+  (user as any)?.id ??
+  (user as any)?.ID;
+  const contesteStatusPedido = data?.contesteStatus;
+  const contesteEmAndamento = contesteStatusPedido === 1 || (ultimoConteste && [1, 2].includes(ultimoConteste.status));
+  const canContest =
+    data?.status === 2 &&
+    solicitanteId &&
+    usuarioLogadoId &&
+    solicitanteId === usuarioLogadoId &&
+    !contesteEmAndamento &&
+    !ultimoConteste;
+
+  const showContesteBadge = !!ultimoConteste;
+  const badgeStatus = ultimoConteste?.status;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white w-full max-w-5xl rounded-lg shadow-xl z-10 flex flex-col max-h-[90vh]">
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold">
-            {data ? `Detalhes do Pedido #${data.id}` : (pedidoId !== null ? `Pedido #${pedidoId}` : 'Detalhes do Pedido')}
-          </h3>
-          <button onClick={onClose} className="p-2 rounded hover:bg-gray-100" aria-label="Fechar">
-            <X className="w-5 h-5 text-gray-600" />
-          </button>
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold">
+              {data ? `Detalhes do Pedido #${data.id}` : (pedidoId !== null ? `Pedido #${pedidoId}` : 'Detalhes do Pedido')}
+            </h3>
+            {showContesteBadge && badgeStatus && (
+              <span
+                className={`px-2 py-1 rounded text-xs font-medium ${badgeClassByContesteStatus[badgeStatus] || 'bg-gray-100 text-gray-700'}`}
+                title={ultimoConteste?.justificativa}
+              >
+                {contesteStatusLabel[badgeStatus] || `Conteste (${badgeStatus})`}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {canContest && (
+              <button
+                onClick={() => setContestOpen(true)}
+                className="px-3 py-1.5 rounded bg-red-600 text-white text-sm hover:bg-red-700"
+                title="Contestar reprovação deste pedido"
+              >
+                Contestar
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 rounded hover:bg-gray-100" aria-label="Fechar">
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
 
+        {/* Corpo */}
         <div className="p-6 space-y-6 overflow-y-auto">
           {loading && (
             <div className="text-sm text-gray-600 animate-pulse">Carregando detalhes...</div>
@@ -138,9 +251,17 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
           {erro && !loading && (
             <div className="text-sm text-red-600">Erro: {erro}</div>
           )}
+
+          {/* Aviso de conteste em andamento (quando reprovado) */}
+          {data?.status === 2 && contesteEmAndamento && (
+            <div className="p-3 rounded-md bg-yellow-50 border border-yellow-200 text-xs text-yellow-800">
+              Há uma contestação em andamento para este pedido.
+            </div>
+          )}
+
           {!loading && !erro && data && (
             <>
-              {/* Header */}
+              {/* Header informativo */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <div className="text-xs text-gray-500">Data</div>
@@ -168,25 +289,63 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 </div>
               </div>
 
-              {/* Mostrar motivo de reprovação se houver */}
+              {/* Motivo reprovação */}
               {data.status === 2 && data.reprovacaoMotivo && (
                 <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
                   <strong>Motivo da reprovação:</strong> {data.reprovacaoMotivo}
                 </div>
               )}
 
-              {/* Aprovação / aprovador */}
-              {data.aprovador && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-800">Aprovador</h4>
-                  <div className="text-sm text-gray-700">
-                    <div>Aprovado por: <span className="font-medium">{data.aprovador.nome}</span> ({data.aprovador.email})</div>
-                    {data.aprovador.perfil && <div className="text-xs text-gray-500">Perfil: {data.aprovador.perfil}</div>}
-                  </div>
+              {/* Último conteste finalizado */}
+              {ultimoConteste && [3, 4].includes(ultimoConteste.status) && (
+                <div
+                  className={
+                    `p-3 rounded-md border text-sm ` +
+                    (ultimoConteste.status === 3
+                      ? 'bg-green-50 border-green-200 text-green-800'
+                      : 'bg-red-50 border-red-200 text-red-800')
+                  }
+                >
+                  <strong>Resultado da contestação:</strong>{' '}
+                  {ultimoConteste.status === 3 ? 'Deferido' : 'Indeferido'}
+                  {ultimoConteste.parecer && (
+                    <div className="mt-1 text-xs">
+                      <strong>Parecer:</strong> {ultimoConteste.parecer}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Divergência (se existir) */}
+              {/* Painel para aprovador analisar quando pendente */}
+              {ultimoConteste && (user?.tipoUsuario === 1 || user?.tipoUsuario === 2 || ['ADMIN', 'APROVADOR'].includes(String(user?.perfil || '').toUpperCase())) && (
+                <ContestReviewPanel
+                  conteste={{
+                    id: ultimoConteste.id,
+                    status: ultimoConteste.status,
+                    justificativa: ultimoConteste.justificativa,
+                    motivoReprovacao: ultimoConteste.motivoReprovacao,
+                    parecer: ultimoConteste.parecer
+                  }}
+                  pedidoId={data.id}
+                  onDone={() => {
+                    fetchPedidoDetalhe(data.id).then(setData).catch(() => { });
+                    fetchContestes(data.id, token ?? undefined).then(list => {
+                      const first = list && list.length ? list[0] : null;
+                      setUltimoConteste(first ? {
+                        id: first.id,
+                        status: first.status,
+                        justificativa: first.justificativa,
+                        dataCriacao: first.dataCriacao,
+                        motivoReprovacao: first.motivoReprovacao,
+                        parecer: first.parecer,
+                        dataAnalise: first.dataAnalise || null
+                      } : null);
+                    }).catch(() => { });
+                  }}
+                />
+              )}
+
+              {/* Divergência */}
               {divergencia && (
                 <div className="flex items-start gap-2 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
                   <AlertTriangle className="w-4 h-4 mt-0.5" />
@@ -203,7 +362,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
               <div className="space-y-3">
                 <h4 className="font-semibold text-gray-800">Itens ({data.itens.length})</h4>
 
-                {/* Desktop table */}
+                {/* Desktop */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm border border-gray-200 rounded-lg">
                     <thead className="bg-gray-50">
@@ -251,7 +410,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                   </table>
                 </div>
 
-                {/* Mobile cards */}
+                {/* Mobile */}
                 <div className="md:hidden space-y-3">
                   {data.itens.map(it => (
                     <div key={it.codProd} className="border border-gray-200 rounded-lg p-3 flex gap-3">
@@ -346,7 +505,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 </div>
               )}
 
-              {/* Concatenação e Eventos */}
+              {/* Concatenação */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-gray-800">Concatenação</h4>
                 {data.concatRole === 'RESULTADO' && data.concatOrigens.length > 0 && (
@@ -371,15 +530,17 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 )}
               </div>
 
+              {/* Aprovação */}
               {data.aprovador && (
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-800">Aprovação</h4>
+                  <h4 className="font-semibold text-gray-800">Análise</h4>
                   <div className="text-sm text-gray-700">
-                    Aprovado por: <span className="font-medium">{data.aprovador.nome}</span> ({data.aprovador.email})
+                    Analisado por: <span className="font-medium">{data.aprovador.nome}</span> ({data.aprovador.email}) | ID: <span className='font-medium'>{data.aprovador.id}</span>
                   </div>
                 </div>
               )}
 
+              {/* Eventos */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-gray-800">Eventos</h4>
                 <PedidoTimeline eventos={data.eventos} />
@@ -388,12 +549,26 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
           )}
         </div>
 
+        {/* Footer */}
         <div className="px-6 py-4 border-t flex justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200">
             Fechar
           </button>
         </div>
       </div>
+
+      <ContestModal
+        open={contestOpen}
+        onClose={() => setContestOpen(false)}
+        pedidoId={data?.id || (pedidoId as number)}
+        motivoReprovacao={(data as any)?.reprovacaoMotivo}
+        onCreated={() => {
+          setContestOpen(false);
+          if (pedidoId != null) {
+            fetchPedidoDetalhe(pedidoId).then(setData).catch(() => { });
+          }
+        }}
+      />
     </div>
   );
 };

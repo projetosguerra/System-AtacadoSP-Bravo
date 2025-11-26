@@ -64,6 +64,7 @@ export interface PedidoDetalhe {
   eventos: PedidoEvento[];
   editavel: boolean;
   reprovacaoMotivo?: string;
+  contesteStatus?: number;
 }
 
 export interface PedidoPendente {

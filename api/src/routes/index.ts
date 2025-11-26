@@ -9,18 +9,19 @@ import setores from './setores.js';
 import financeiro from './financeiro.js';
 import dev from './dev.js';
 import health from './health.js';
+import conteste from './conteste.js';
 import { poolGate } from '../middleware/poolGate.js';
 
 const router = Router();
 
 router.use(health);
 
-// Gates de pool por prefixo pesado (falha rápida quando saturar)
 const qTh = Number(process.env.DB_QUEUE_THRESHOLD ?? 15);
 router.use('/api/produtos', poolGate({ queueThreshold: qTh }));
 router.use('/api/pedidos', poolGate({ queueThreshold: qTh }));
 router.use('/api/pedido', poolGate({ queueThreshold: qTh }));
 router.use('/api/financeiro', poolGate({ queueThreshold: qTh }));
+router.use('/api/conteste', poolGate({ queueThreshold: qTh }));
 
 router.use(auth);
 router.use(produtos);
@@ -30,6 +31,9 @@ router.use(carrinho);
 router.use(usuarios);
 router.use(setores);
 router.use(financeiro);
+
+router.use(conteste);
+
 router.use(dev);
 
 export default router;
