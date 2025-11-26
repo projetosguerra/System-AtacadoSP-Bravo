@@ -193,12 +193,16 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ns}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(p.data)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime(p.data)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 flex items-center gap-2">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 flex items-center gap-2" title={
+                    (p.concatRole === 'RESULTADO' || p.concatRole === 'ORIGEM')
+                      ? `Grupo ${p.concatGroupId ?? '—'}`
+                      : undefined
+                  }>
                     {p.id}
                     {p.concatRole === 'RESULTADO' && (
                       <span
                         className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700"
-                        title={`Pedido resultado da concatenação (Grupo ${p.concatGroupId})`}
+                        title={`Pedido resultado da concatenação (Grupo ${p.concatGroupId ?? '—'})`}
                       >
                         Concatenado
                       </span>
@@ -206,7 +210,7 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
                     {p.concatRole === 'ORIGEM' && (
                       <span
                         className="px-2 py-0.5 text-[10px] rounded-full bg-gray-100 text-gray-700"
-                        title={`Pedido origem (Grupo ${p.concatGroupId})`}
+                        title={`Pedido origem (Grupo ${p.concatGroupId ?? '—'})`}
                       >
                         ORIGEM
                       </span>
@@ -258,11 +262,10 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
           <button
             onClick={() => onPageChange(safePage - 1)}
             disabled={safePage <= 1}
-            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              safePage <= 1
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${safePage <= 1
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+              }`}
             aria-label="Página anterior"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -274,11 +277,10 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
               <button
                 key={p}
                 onClick={() => onPageChange(p)}
-                className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                  active
+                className={`px-3 py-2 text-sm font-medium rounded-md border ${active
                     ? 'bg-red-500 text-white border-red-500'
                     : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 {p}
               </button>
@@ -287,11 +289,10 @@ const PendingOrdersTable: React.FC<PendingOrdersTableProps> = ({
           <button
             onClick={() => onPageChange(safePage + 1)}
             disabled={safePage >= totalPages}
-            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              safePage >= totalPages
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${safePage >= totalPages
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+              }`}
             aria-label="Próxima página"
           >
             <ChevronRight className="w-4 h-4" />

@@ -19,6 +19,19 @@ function normalizeFilial(f: string | number | undefined | null): string {
   return noZeros || '0';
 }
 
+function addBusinessDays(fromDate: Date, days: number): Date {
+  const d = new Date(fromDate);
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay(); // 0=Dom, 6=Sab
+    if (dow !== 0 && dow !== 6) {
+      added++;
+    }
+  }
+  return d;
+}
+
 const statusLabel: Record<number, string> = {
   1: 'Aprovado',
   2: 'Reprovado',
@@ -183,6 +196,7 @@ export const obterPedido = async (req: any, res: any) => {
           p.STATUS,
           p.CODUSUARIO,
           p.APROVADOR_ID,
+          p.DATA_APROVACAO,
           p.CONCAT_PAPEL,
           p.CONCAT_GRUPO_ID,
           p.VALOR_TOTAL,
@@ -274,6 +288,14 @@ export const obterPedido = async (req: any, res: any) => {
         }
       }
 
+      let concatResumo: { papel: 'RESULTADO' | 'ORIGEM' | null; grupoId: number | null; origens: Array<{ id: number; status: number; statusLabel: string }>; resultado: { id: number; status: number; statusLabel: string } | null } = {
+        papel: (papel === 'RESULTADO' ? 'RESULTADO' : papel === 'ORIGEM' ? 'ORIGEM' : null),
+        grupoId: grupoId ?? null,
+        origens: concatOrigens,
+        resultado: concatResultado
+      };
+
+
       const eventosSql = `
         SELECT IDEVENTO, TIPO, USUARIO_ID, DATA_EVENTO, DETALHE_JSON
           FROM BRAMV_PEDIDO_EVENTO
@@ -363,6 +385,39 @@ export const obterPedido = async (req: any, res: any) => {
         );
         contesteStatus = Number((csR.rows?.[0] as any)?.CONTESTE_STATUS ?? 0);
       } catch { }
+
+      const usuarioNomeCache = new Map<number, string>();
+      async function getUserName(id: number | null | undefined): Promise<string | null> {
+        if (!Number.isFinite(Number(id))) return null;
+        const nid = Number(id);
+        if (usuarioNomeCache.has(nid)) return usuarioNomeCache.get(nid)!;
+        const r = await connection.execute(
+          `SELECT PRIMEIRO_NOME || ' ' || NVL(ULTIMO_NOME,'') AS NOME
+             FROM BRAMV_USUARIOS
+            WHERE CODUSUARIO = :id`,
+          { id: nid },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        const nome = (r.rows?.[0] as any)?.NOME || null;
+        if (nome) usuarioNomeCache.set(nid, nome);
+        return nome;
+      }
+
+      for (const e of eventos) {
+        if (e.usuarioId) {
+          e['usuarioNome'] = await getUserName(e.usuarioId);
+        }
+      }
+
+      let previsaoEntregaPadrao: Date | null = null;
+      if (h.DATA_APROVACAO) {
+        try {
+          const base = new Date(h.DATA_APROVACAO);
+          previsaoEntregaPadrao = addBusinessDays(base, 15);
+        } catch {
+          previsaoEntregaPadrao = null;
+        }
+      }
 
       let statusOperacional: string | null = null;
       let posicaoRaw: string | null = null;
@@ -474,10 +529,10 @@ export const obterPedido = async (req: any, res: any) => {
         qtdItens: h.QTD_ITENS ?? qtdItensCalc,
         valorTotal: h.VALOR_TOTAL ?? valorTotalCalc,
         itens,
-        concatRole: papel === 'RESULTADO' ? 'RESULTADO' : papel === 'ORIGEM' ? 'ORIGEM' : null,
-        concatGroupId: grupoId ?? null,
-        concatOrigens,
-        concatResultado,
+        concatRole: concatResumo.papel,
+        concatGroupId: concatResumo.grupoId,
+        concatOrigens: concatResumo.origens,
+        concatResultado: concatResumo.resultado,
         aprovador,
         eventos,
         editavel,
@@ -490,7 +545,13 @@ export const obterPedido = async (req: any, res: any) => {
         financeiroPago,
         financeiroEmAberto,
         atesteResumo,
-        satisfacaoResumo
+        satisfacaoResumo,
+        previsaoEntregaPadrao,
+        concatResumoText: (concatResumo.papel === 'RESULTADO' && concatResumo.origens.length)
+          ? `Resultado de concatenação: origens ${concatResumo.origens.map(o => `#${o.id}`).join(', ')}`
+          : (concatResumo.papel === 'ORIGEM' && concatResumo.resultado)
+            ? `Origem concatenada: resultado #${concatResumo.resultado.id}`
+            : null
       };
     });
 
@@ -840,70 +901,81 @@ export const obterTransportadoraPedido = async (req: any, res: any) => {
   if (!Number.isFinite(num)) return res.status(400).json({ error: 'ID inválido.' });
 
   try {
-    const row = await withConnection(async (connection) => {
-      const sql = `
-        SELECT CASE
-                 WHEN POSICAO = 'F' THEN 'FATURADO'
-                 WHEN POSICAO = 'C' THEN 'CANCELADO'
-                 ELSE 'EM CONFERENCIA/SEPARACAO'
-               END AS STATUS_PEDIDO,
-               NUMPED,
-               NUMPEDRCA,
-               NUMNOTA,
-               NUMTRANSVENDA,
-               DATA,
-               VLTOTAL,
-               NVL(VLFRETE, 0) AS VLFRETE,
-               DTENTREGA,
-               CODFILIAL,
-               TOTPESO,
-               TOTVOLUME,
-               NUMITENS,
-               (SELECT PCFORNEC.FORNECEDOR
-                  FROM PCFORNEC
-                 WHERE CODFORNEC = PCPEDC.CODFORNECFRETE) AS TRANSPORTADORA
-          FROM PCPEDC
-         WHERE NUMPEDRCA = :id
-      `;
-      const r = await connection.execute(sql, { id: num }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
-      return (r.rows && r.rows[0]) || null;
+    const payload = await withConnection(async (connection) => {
+      let row: any = null;
+      try {
+        const sql = `
+          SELECT CASE
+                   WHEN POSICAO = 'F' THEN 'FATURADO'
+                   WHEN POSICAO = 'C' THEN 'CANCELADO'
+                   ELSE 'EM CONFERENCIA/SEPARACAO'
+                 END AS STATUS_PEDIDO,
+                 NUMPED, NUMPEDRCA, NUMNOTA, NUMTRANSVENDA, DATA,
+                 VLTOTAL, NVL(VLFRETE, 0) AS VLFRETE,
+                 DTENTREGA, CODFILIAL, TOTPESO, TOTVOLUME, NUMITENS,
+                 (SELECT PCFORNEC.FORNECEDOR
+                    FROM PCFORNEC
+                   WHERE CODFORNEC = PCPEDC.CODFORNECFRETE) AS TRANSPORTADORA
+            FROM PCPEDC
+           WHERE NUMPEDRCA = :id
+        `;
+        const r = await connection.execute(sql, { id: num }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+        row = (r.rows && r.rows[0]) || null;
+      } catch {
+        row = null;
+      }
+
+      if (row) {
+        return {
+          statusPedido: row.STATUS_PEDIDO ?? null,
+          numPed: row.NUMPED ?? null,
+          numPedRca: row.NUMPEDRCA ?? null,
+          numNota: row.NUMNOTA ?? null,
+          numTransVenda: row.NUMTRANSVENDA ?? null,
+          data: row.DATA ?? null,
+          valorTotal: Number(row.VLTOTAL ?? 0),
+          vlFrete: Number(row.VLFRETE ?? 0),
+          dtEntrega: row.DTENTREGA ?? null,
+          codFilial: row.CODFILIAL ?? null,
+          totPeso: row.TOTPESO ?? null,
+          totVolume: row.TOTVOLUME ?? null,
+          numItens: row.NUMITENS ?? null,
+          transportadora: row.TRANSPORTADORA ?? null
+        };
+      }
+
+      let dataAprovacao: Date | null = null;
+      try {
+        const ap = await connection.execute(
+          `SELECT DATA_APROVACAO FROM BRAMV_PEDIDOC WHERE NUMPEDRCA = :id`,
+          { id: num },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        dataAprovacao = (ap.rows?.[0] as any)?.DATA_APROVACAO ?? null;
+      } catch {
+        dataAprovacao = null;
+      }
+
+      const previsaoPadrao = dataAprovacao ? addBusinessDays(new Date(dataAprovacao), 15) : null;
+
+      return {
+        statusPedido: null,
+        numPed: null,
+        numPedRca: num,
+        numNota: null,
+        numTransVenda: null,
+        data: null,
+        valorTotal: 0,
+        vlFrete: 0,
+        dtEntrega: previsaoPadrao ?? null,
+        codFilial: null,
+        totPeso: null,
+        totVolume: null,
+        numItens: null,
+        transportadora: null,
+        _fallback: true 
+      };
     });
-
-    if (!row) return res.status(404).json({ error: 'Pedido não encontrado.' });
-
-    const typedRow = row as {
-      STATUS_PEDIDO?: string;
-      NUMPED?: number;
-      NUMPEDRCA?: number;
-      NUMNOTA?: number;
-      NUMTRANSVENDA?: number;
-      DATA?: Date;
-      VLTOTAL?: number;
-      VLFRETE?: number;
-      DTENTREGA?: Date;
-      CODFILIAL?: string;
-      TOTPESO?: number;
-      TOTVOLUME?: number;
-      NUMITENS?: number;
-      TRANSPORTADORA?: string;
-    };
-
-    const payload = {
-      statusPedido: typedRow.STATUS_PEDIDO ?? null,
-      numPed: typedRow.NUMPED ?? null,
-      numPedRca: typedRow.NUMPEDRCA ?? null,
-      numNota: typedRow.NUMNOTA ?? null,
-      numTransVenda: typedRow.NUMTRANSVENDA ?? null,
-      data: typedRow.DATA ?? null,
-      valorTotal: Number(typedRow.VLTOTAL ?? 0),
-      vlFrete: Number(typedRow.VLFRETE ?? 0),
-      dtEntrega: typedRow.DTENTREGA ?? null,
-      codFilial: typedRow.CODFILIAL ?? null,
-      totPeso: typedRow.TOTPESO ?? null,
-      totVolume: typedRow.TOTVOLUME ?? null,
-      numItens: typedRow.NUMITENS ?? null,
-      transportadora: typedRow.TRANSPORTADORA ?? null
-    };
 
     return res.json({ transportadora: payload });
   } catch (err: any) {

@@ -220,6 +220,10 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   const temSatisfacao = !!(data as any)?.satisfacaoResumo;
   const podeAvaliar = temAteste && !temSatisfacao && solicitanteId === usuarioLogadoId;
 
+  const previsaoPadrao = (data as any)?.previsaoEntregaPadrao
+    ? new Date((data as any).previsaoEntregaPadrao)
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -494,27 +498,40 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
               {/* Transportadora */}
               {transportadora && (
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-800">Transportadora</h4>
+                  <h4 className="font-semibold text-gray-800">Entrega / Transportadora</h4>
                   <div className="text-sm text-gray-700 grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
                       <div className="text-xs text-gray-500">Transportadora</div>
-                      <div className="font-medium">{transportadora.transportadora ?? transportadora.FORNECEDOR ?? '-'}</div>
+                      <div className="font-medium">
+                        {transportadora.transportadora ?? '—'}
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">Frete</div>
-                      <div className="font-medium">{formatCurrency(transportadora.vlFrete ?? transportadora.VLFRETE ?? 0)}</div>
+                      <div className="font-medium">
+                        {formatCurrency(transportadora.vlFrete ?? 0)}
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">Entrega prevista</div>
-                      <div className="font-medium">{transportadora.dtEntrega ? new Date(transportadora.dtEntrega).toLocaleDateString('pt-BR') : (transportadora.DTENTREGA ? new Date(transportadora.DTENTREGA).toLocaleDateString('pt-BR') : '-')}</div>
+                      <div className="font-medium">
+                        {transportadora.dtEntrega
+                          ? new Date(transportadora.dtEntrega).toLocaleDateString('pt-BR')
+                          : '—'}
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">Nota / Trans. Venda</div>
                       <div className="font-medium">
-                        {transportadora.numNota ?? transportadora.NUMNOTA ?? transportadora.numTransVenda ?? transportadora.NUMTRANSVENDA ?? '-'}
+                        {transportadora.numNota ?? transportadora.NUMNOTA ?? transportadora.numTransVenda ?? transportadora.NUMTRANSVENDA ?? '—'}
                       </div>
                     </div>
                   </div>
+                  {transportadora._fallback && (
+                    <div className="text-xs text-gray-500">
+                      Informações operacionais indisponíveis. Exibindo previsão padrão de entrega (+15 dias úteis após aprovação).
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -556,23 +573,69 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
               {/* Concatenação */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-gray-800">Concatenação</h4>
-                {data.concatRole === 'RESULTADO' && data.concatOrigens.length > 0 && (
+
+                {data.concatRole === 'RESULTADO' && (
                   <div className="text-sm text-gray-700">
-                    Resultado de concatenação. Origens:
-                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                      {data.concatOrigens.map(o => (
-                        <li key={o.id}>
-                          Pedido #{o.id} — {o.statusLabel}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mb-1">
+                      Pedido gerado por concatenação.
+                      {data.concatGroupId && (
+                        <span className="ml-1 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                          Grupo {data.concatGroupId}
+                        </span>
+                      )}
+                    </div>
+                    {data.concatOrigens.length > 0 ? (
+                      <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                        {data.concatOrigens.map(o => (
+                          <li key={o.id}>
+                            Pedido #{o.id} — {o.statusLabel}{' '}
+                            <button
+                              type="button"
+                              className="text-xs text-blue-600 hover:underline ml-1"
+                              onClick={() => {
+                                fetchPedidoDetalhe(o.id).then(setData).catch(() => { });
+                              }}
+                              title={`Abrir detalhes do pedido #${o.id}`}
+                            >
+                              ver
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-xs text-gray-500">Sem origens listadas.</div>
+                    )}
                   </div>
                 )}
-                {data.concatRole === 'ORIGEM' && data.concatResultado && (
+
+                {data.concatRole === 'ORIGEM' && (
                   <div className="text-sm text-gray-700">
-                    Origem concatenada. Pedido resultado: #{data.concatResultado.id} — {data.concatResultado.statusLabel}
+                    Pedido marcado como origem de concatenação.
+                    {data.concatGroupId && (
+                      <span className="ml-1 text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                        Grupo {data.concatGroupId}
+                      </span>
+                    )}
+                    {data.concatResultado ? (
+                      <div className="mt-1">
+                        Resultado: #{data.concatResultado.id} — {data.concatResultado.statusLabel}{' '}
+                        <button
+                          type="button"
+                          className="text-xs text-blue-600 hover:underline"
+                          onClick={() => {
+                            fetchPedidoDetalhe(data.concatResultado!.id).then(setData).catch(() => { });
+                          }}
+                          title={`Abrir detalhes do pedido #${data.concatResultado.id}`}
+                        >
+                          ver
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500">Resultado não localizado.</div>
+                    )}
                   </div>
                 )}
+
                 {!data.concatRole && (
                   <div className="text-sm text-gray-500">Sem concatenação.</div>
                 )}
@@ -583,10 +646,38 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-800">Análise</h4>
                   <div className="text-sm text-gray-700">
-                    Analisado por: <span className="font-medium">{data.aprovador.nome}</span> ({data.aprovador.email}) | ID: <span className='font-medium'>{data.aprovador.id}</span>
+                    Analisado por: <span className="font-medium">{data.aprovador.nome}</span> ({data.aprovador.email})
                   </div>
                 </div>
               )}
+              {data.status === 2 && data.reprovacaoMotivo && (
+                <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
+                  <strong>Reprovado</strong> por {data.aprovador?.nome ? data.aprovador.nome : '—'} • Motivo: {data.reprovacaoMotivo}
+                </div>
+              )}
+
+              {data.concatRole && (
+                <div className="text-sm text-gray-700">
+                  {data.concatRole === 'RESULTADO'
+                    ? 'Pedido gerado por concatenação.'
+                    : data.concatRole === 'ORIGEM'
+                      ? 'Pedido marcado como origem de concatenação.'
+                      : null}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 text-xs">
+                {data.statusOperacional && (
+                  <span className="px-2 py-1 rounded bg-gray-100 text-gray-800 border">
+                    Operacional: {data.statusOperacional}
+                  </span>
+                )}
+                {data.entregue && (
+                  <span className="px-2 py-1 rounded bg-green-100 text-green-800 border border-green-200">
+                    Entregue (operacional)
+                  </span>
+                )}
+              </div>
 
               {/* Eventos */}
               <div className="space-y-3">

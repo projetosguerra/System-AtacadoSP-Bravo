@@ -159,18 +159,31 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   const pages = Array.from({ length: endBtn - startBtn + 1 }, (_, i) => startBtn + i);
 
   const renderConcatChip = (o: HistoricalOrder) => {
+    const tooltipBase = o.concatRole === 'RESULTADO'
+      ? `Resultado de concatenação`
+      : o.concatRole === 'ORIGEM'
+        ? `Origem de concatenação`
+        : '';
+    const tt = [
+      tooltipBase,
+      o.concatGroupId ? `Grupo ${o.concatGroupId}` : ''
+    ].filter(Boolean).join(' • ');
     if (o.concatRole === 'RESULTADO') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-          title={`Pedido gerado por concatenação (grupo ${o.concatGroupId ?? o.id})`}>
+        <span
+          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+          title={tt}
+        >
           Concatenado
         </span>
       );
     }
     if (o.concatRole === 'ORIGEM') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700"
-          title={`Pedido origem de concatenação (grupo ${o.concatGroupId ?? ''})`}>
+        <span
+          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700"
+          title={tt}
+        >
           Origem
         </span>
       );
@@ -325,11 +338,10 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
           <button
             onClick={() => onPageChange(safeCurrentPage - 1)}
             disabled={safeCurrentPage <= 1}
-            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              safeCurrentPage <= 1
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${safeCurrentPage <= 1
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+              }`}
             aria-label="Página anterior"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -353,9 +365,8 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
               <button
                 key={p}
                 onClick={() => onPageChange(p)}
-                className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                  active ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
+                className={`px-3 py-2 text-sm font-medium rounded-md border ${active ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
               >
                 {p}
               </button>
@@ -377,11 +388,10 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
           <button
             onClick={() => onPageChange(safeCurrentPage + 1)}
             disabled={safeCurrentPage >= totalPagesLocal}
-            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              safeCurrentPage >= totalPagesLocal
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${safeCurrentPage >= totalPagesLocal
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
+              }`}
             aria-label="Próxima página"
           >
             <ChevronRight className="w-4 h-4" />

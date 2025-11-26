@@ -231,6 +231,7 @@ export const createConcat = async (req: any, res: any) => {
       const codUsuario = toNum((rUser.rows?.[0] as any)?.CODUSUARIO, NaN);
       const createdBy = toNum(req.user?.codUsuario ?? null, NaN) || null;
 
+      // Cria pedido resultado
       await conn.execute(
         `INSERT INTO BRAMV_PEDIDOC
            (NUMPEDRCA, DATA, CODUSUARIO, STATUS, QTD_ITENS, VALOR_TOTAL,
@@ -241,17 +242,21 @@ export const createConcat = async (req: any, res: any) => {
         { id: newId, codUsuario, qtd: qtdItens, total, grp: newId, createdBy }
       );
 
+      // Itens agregados no resultado
       await conn.executeMany(
         `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA)
          VALUES (:id, :codprod, :qt, :pvenda)`,
         aggItems.map(it => ({ id: newId, codprod: it.codprod, qt: it.qt, pvenda: it.pvenda }))
       );
 
+      // Relacionamento de concatenação
       await conn.executeMany(
         `INSERT INTO BRAMV_PEDIDO_CONCAT_SRC (GRUPO_ID, PEDIDO_NOVO, PEDIDO_ORIGEM, CRIADO_POR)
          VALUES (:grp, :newId, :src, :createdBy)`,
         allIds.map(src => ({ grp: newId, newId, src, createdBy }))
       );
+
+      // Marca origens
       await conn.execute(
         `UPDATE BRAMV_PEDIDOC
             SET STATUS = 9,
@@ -263,6 +268,32 @@ export const createConcat = async (req: any, res: any) => {
             AND NUMPEDRCA <> :newId`,
         { ...binds, grp: newId, createdBy, newId }
       );
+
+      // EVENTOS DE TIMELINE (seguro)
+      const detalheResultado = {
+        grupoId: newId,
+        origens: allIds.filter(x => x !== newId),
+        total,
+        qtdItens
+      };
+      await conn.execute(
+        `INSERT INTO BRAMV_PEDIDO_EVENTO (NUMPEDRCA, TIPO, USUARIO_ID, DETALHE_JSON)
+         VALUES (:n, 'CONCAT_RESULTADO', :u, :det)`,
+        { n: newId, u: createdBy, det: JSON.stringify(detalheResultado) }
+      );
+
+      const detalheOrigemBase = {
+        grupoId: newId,
+        resultado: newId
+      };
+      for (const srcId of allIds) {
+        if (srcId === newId) continue;
+        await conn.execute(
+          `INSERT INTO BRAMV_PEDIDO_EVENTO (NUMPEDRCA, TIPO, USUARIO_ID, DETALHE_JSON)
+           VALUES (:n, 'CONCAT_ORIGEM', :u, :det)`,
+          { n: srcId, u: createdBy, det: JSON.stringify(detalheOrigemBase) }
+        );
+      }
 
       await conn.commit();
       return { newId, total, qtdItens };

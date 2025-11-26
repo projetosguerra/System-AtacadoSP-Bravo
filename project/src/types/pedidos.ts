@@ -47,6 +47,8 @@ export interface PedidoEvento {
 }
 
 export interface PedidoDetalhe {
+  entregue: any;
+  statusOperacional: any;
   id: number;
   status: number;
   statusLabel: string;
