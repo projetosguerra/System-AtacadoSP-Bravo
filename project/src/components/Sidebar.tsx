@@ -120,7 +120,7 @@ const Sidebar = () => {
               end
             >
               <span className="flex-shrink-0">{item.icon}</span>
-              <span className="text-sm font-medium">{item.label}</span>
+              <span className="text-[18px] font-medium">{item.label}</span>
             </NavLink>
           ))}
         </nav>
