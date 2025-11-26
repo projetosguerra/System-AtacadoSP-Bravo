@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listarCarrinho, adicionarItem, atualizarItem, removerItem, submeterCarrinho } from '../controllers/carrinhoController.js';
+import { listarCarrinho, adicionarItem, atualizarItem, removerItem, submeterCarrinho, limparCarrinho } from '../controllers/carrinhoController.js';
 import { addItemSchema, updateItemSchema } from '../validators/cart.js';
 
 const router = Router();
@@ -19,6 +19,8 @@ router.put('/api/carrinho/:codusuario/items/:codprod', (req, res, next) => {
 });
 
 router.delete('/api/carrinho/:codusuario/items/:codprod', (req, res, next) => removerItem(req, res).catch(next));
+
+router.delete('/api/carrinho/:codusuario/clear', (req, res, next) => limparCarrinho(req, res).catch(next));
 
 router.post('/api/carrinho/:codusuario/submit', (req, res, next) => submeterCarrinho(req, res).catch(next));
 

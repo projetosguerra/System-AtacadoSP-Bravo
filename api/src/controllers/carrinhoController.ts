@@ -1,6 +1,7 @@
 import oracledb from 'oracledb';
 import { withConnection } from '../db/pool.js';
 import { resolveCodUsurForClient, reserveNextWinthorOrderNumber } from '../utils/winthorOrder.js';
+import { toImageUrl } from '../utils/images.js';
 
 const findOrCreateCartHeader = async (connection: oracledb.Connection, codUsuario: number): Promise<number> => {
   const result = await connection.execute<{ NUMPEDRCA: number }>(
@@ -33,7 +34,11 @@ export const listarCarrinho = async (req: any, res: any) => {
   try {
     const items = await withConnection(async (connection) => {
       const result = await connection.execute(
-        `SELECT i.CODPROD, i.QT, i.PVENDA, p.DESCRICAO, p.UNIDADE
+        `SELECT i.CODPROD, i.QT, i.PVENDA,
+                NVL(p.NOMEECOMMERCE, p.DESCRICAO) AS DESCRICAO,
+                p.EMBALAGEM AS UNIDADE,
+                p.CODAUXILIAR,
+                p.DIRFOTOPROD
            FROM BRAMV_PEDIDOI i
            JOIN BRAMV_PEDIDOC c ON i.NUMPEDRCA = c.NUMPEDRCA
            JOIN PCPRODUT p      ON i.CODPROD   = p.CODPROD
@@ -41,14 +46,23 @@ export const listarCarrinho = async (req: any, res: any) => {
             AND c.STATUS = 0`,
         [codusuario], { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
-      return (result.rows || []).map((item: any) => ({
-        id: item.CODPROD,
-        nome: item.DESCRICAO,
-        quantidade: item.QT,
-        preco: item.PVENDA,
-        unit: item.UNIDADE,
-        imgUrl: `https://placehold.co/100x100?text=${item.CODPROD}`
-      }));
+      return (result.rows || []).map((r: any) => {
+        const qt = Number(r.QT || 0);
+        const pv = Number(r.PVENDA || 0);
+        const subtotal = +(qt * pv);
+        let img = toImageUrl ? toImageUrl(r.DIRFOTOPROD, r.CODPROD) : '';
+        if (!img) img = `/api/media/produtos/${r.CODPROD}.JPG`;
+        return {
+          id: Number(r.CODPROD),
+          nome: r.DESCRICAO,
+          quantidade: qt,
+          preco: pv,
+          unit: r.UNIDADE,
+          codigoAuxiliar: r.CODAUXILIAR ?? null,
+          subtotal,
+          imgUrl: img
+        };
+      });
     });
     res.json(items);
   } catch (err) {
@@ -204,6 +218,48 @@ export const removerItem = async (req: any, res: any) => {
   } catch (err) {
     console.error('Erro ao remover item:', err);
     res.status(500).json({ error: 'Erro ao remover item.' });
+  }
+};
+
+export const limparCarrinho = async (req: any, res: any) => {
+  const { codusuario } = req.params;
+  try {
+    await withConnection(async (connection) => {
+      const hdr = await connection.execute(
+        `SELECT NUMPEDRCA
+           FROM BRAMV_PEDIDOC
+          WHERE CODUSUARIO = :cod
+            AND STATUS = 0
+          FOR UPDATE`,
+        { cod: Number(codusuario) },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const row: any = hdr.rows?.[0];
+      if (!row) {
+        // Nenhum carrinho ativo, não é erro: retorna sucesso
+        return;
+      }
+      const numpedrca = Number(row.NUMPEDRCA);
+
+      await connection.execute(
+        `DELETE FROM BRAMV_PEDIDOI WHERE NUMPEDRCA = :id`,
+        { id: numpedrca }
+      );
+
+      await connection.execute(
+        `UPDATE BRAMV_PEDIDOC
+            SET QTD_ITENS = 0,
+                VALOR_TOTAL = 0
+          WHERE NUMPEDRCA = :id`,
+        { id: numpedrca }
+      );
+
+      await connection.commit();
+    });
+    res.status(200).json({ success: true, message: 'Carrinho limpo.' });
+  } catch (err: any) {
+    console.error('Erro ao limpar carrinho:', err);
+    res.status(500).json({ error: err.message || 'Erro ao limpar carrinho.' });
   }
 };
 

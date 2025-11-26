@@ -8,6 +8,7 @@ interface CartContextType {
   addToCart: (product: Product, quantity: number) => void;
   updateQuantity: (productId: number, newQuantity: number) => void;
   removeFromCart: (productId: number) => void;
+  clearCart: () => Promise<void>; // NOVO
   submitCart: () => Promise<void>;
   isLoading: boolean;
   error: string | null;
@@ -27,13 +28,20 @@ export const useCart = () => {
   return context;
 };
 
+type FinanceData = { gastosPorSetor: { CODSETOR: number; DESCRICAO: string; GASTO_TOTAL: number }[] };
+
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, token } = useAuth();
-  const { refetchAllData } = useData();
+  const { refetchAllData, setores, financialData } = useData();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { setores, financialData } = useData();
+
+  const [financeLocal, setFinanceLocal] = useState<FinanceData | null>(null);
+
+  const effectiveFinance = (financialData && Array.isArray(financialData.gastosPorSetor) && financialData.gastosPorSetor.length > 0)
+    ? financialData
+    : financeLocal;
 
   const fetchCart = useCallback(async () => {
     if (!user) return;
@@ -50,7 +58,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, error]);
 
   useEffect(() => {
     if (user) {
@@ -60,18 +68,51 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user, fetchCart]);
 
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      if (!user?.codSetor) return;
+
+      const hasCtx = !!(financialData && Array.isArray(financialData.gastosPorSetor) && financialData.gastosPorSetor.length);
+      const hasSectorInCtx = hasCtx && financialData!.gastosPorSetor.some((g: any) => Number(g.CODSETOR) === Number(user.codSetor));
+      if (hasSectorInCtx) return;
+
+      try {
+        const aggParams = new URLSearchParams({ days: '90', maxOrders: '600' });
+        const headers: Record<string, string> = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const respAgg = await fetch(`/api/financeiro?${aggParams.toString()}`, { headers });
+        const bodyAgg = await respAgg.json().catch(() => ({ gastosPorSetor: [] }));
+        const arr = Array.isArray(bodyAgg.gastosPorSetor) ? bodyAgg.gastosPorSetor : [];
+        const hit = arr.find((g: any) => Number(g.CODSETOR) === Number(user.codSetor));
+        if (hit) {
+          setFinanceLocal({ gastosPorSetor: arr });
+          console.info('[CartBudget][finance-agg-hit]', hit);
+          return;
+        }
+
+        const respOne = await fetch(`/api/financeiro/setor/${user.codSetor}?days=90&maxOrders=600`, { headers });
+        const one = await respOne.json().catch(() => ({ CODSETOR: user.codSetor, GASTO_TOTAL: 0 }));
+        setFinanceLocal({ gastosPorSetor: [{ CODSETOR: Number(one.CODSETOR), DESCRICAO: '', GASTO_TOTAL: Number(one.GASTO_TOTAL || 0) }] });
+        console.info('[CartBudget][finance-sector-only]', one);
+      } catch (e) {
+        setFinanceLocal({ gastosPorSetor: [] });
+        console.warn('[CartBudget] financeiro local falhou', e);
+      }
+    })();
+    return () => { abort = true; };
+  }, [user?.codSetor, token, financialData]);
+
   const addToCart = (product: Product, quantity: number) => {
     if (!user) return;
 
+    const { sectorAvailableBalance: saldoDispAtual } = computeSectorBudget(user, setores, effectiveFinance);
+    console.info('[CartBudget][beforeAdd]', computeSectorBudget(user, setores, effectiveFinance));
+
     const newTotalValue = totalValue + (product.preco * quantity);
-    if (newTotalValue > sectorAvailableBalance) {
+    if (newTotalValue > saldoDispAtual) {
       alert('Não foi possível adicionar o produto. O valor total do carrinho excederia o saldo disponível para o seu setor.');
       return;
-    }
-
-    const limitsLoaded = !!(user?.codSetor && Array.isArray(setores) && setores.length && financialData);
-    if (limitsLoaded && newTotalValue > sectorAvailableBalance) {
-      console.warn('[BUDGET] Projeção acima do saldo. totalProj:', newTotalValue, 'saldoDisp:', sectorAvailableBalance);
     }
 
     const originalCart = [...cartItems];
@@ -83,11 +124,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ));
     } else {
       setCartItems([...originalCart, { ...product, quantidade: quantity }]);
-    }
-
-    if (limitsLoaded && cartWillExceedLimit) {
-      alert('Não é possível submeter: valor excede o saldo do setor.');
-      return;
     }
 
     fetch(`/api/carrinho/${user.codUsuario}/items`, {
@@ -105,23 +141,20 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
 
     const originalCart = [...cartItems];
-
     setCartItems(originalCart.filter(item => item.id !== productId));
 
-    fetch(`/api/carrinho/${user.codUsuario}/items/${productId}`, {
-      method: 'DELETE',
-    }).catch(err => {
-      console.error("Falha otimista ao remover item:", err);
-      setCartItems(originalCart);
-      alert("Não foi possível remover o item do carrinho.");
-    });
+    fetch(`/api/carrinho/${user.codUsuario}/items/${productId}`, { method: 'DELETE' })
+      .catch(err => {
+        console.error("Falha otimista ao remover item:", err);
+        setCartItems(originalCart);
+        alert("Não foi possível remover o item do carrinho.");
+      });
   };
 
   const updateQuantity = (productId: number, newQuantity: number) => {
     if (!user || newQuantity < 1) return;
 
     const originalCart = [...cartItems];
-
     setCartItems(originalCart.map(item =>
       item.id === productId ? { ...item, quantidade: newQuantity } : item
     ));
@@ -140,7 +173,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const submitCart = async () => {
     if (!user || cartItems.length === 0) return;
     if (cartWillExceedLimit) {
-      alert('Não é possível submeter o pedido pois o valor excede o saldo do seu setor.');
+      alert('Não é possível submeter o pedido pois o valor excede o saldo disponível do seu setor.');
       return;
     }
     try {
@@ -152,7 +185,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           'Idempotency-Key': idemKey,
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ /* dados do pedido */ })
+        body: JSON.stringify({})
       });
       if (response.ok) {
         setCartItems([]);
@@ -168,24 +201,80 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const clearCart = async () => {
+    if (!user) return;
+    const confirm = window.confirm('Deseja realmente limpar todo o carrinho? Esta ação não pode ser desfeita.');
+    if (!confirm) return;
+
+    const prev = [...cartItems];
+    setCartItems([]); // otimista
+
+    try {
+      const resp = await fetch(`/api/carrinho/${user.codUsuario}/clear`, { method: 'DELETE' });
+      if (!resp.ok) {
+        setCartItems(prev);
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body?.error || 'Falha ao limpar carrinho.');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Erro ao limpar carrinho.');
+    }
+  };
+
   const totalValue = cartItems.reduce((sum, item) => sum + (item.preco || 0) * (item.quantidade || 0), 0);
   const itemCount = cartItems.length;
 
+  function computeSectorBudget(userObj: any, setoresArr: any[], finData: FinanceData | null | undefined) {
+    const codSetor = Number(userObj?.codSetor);
+    const setorRow = (setoresArr || []).find((s: any) => Number(s.CODSETOR) === codSetor);
+
+    const limRaw = Number(setorRow?.LIMITE || 0);
+    const saldoRaw = Number(setorRow?.SALDO || 0);
+    const limiteTotal = limRaw > 0 ? limRaw : saldoRaw;
+
+    const gastoRow = finData?.gastosPorSetor?.find((g: any) => Number(g.CODSETOR) === codSetor);
+    const valorGasto = Number(gastoRow?.GASTO_TOTAL || 0);
+
+    const saldoDisponivel = Math.max(0, limiteTotal - valorGasto);
+    const dbg = { codSetor, limiteTotal, valorGasto, saldoDisponivel, limRaw, saldoRaw, financeLen: finData?.gastosPorSetor?.length || 0 };
+    console.info('[CartBudget][compute]', dbg);
+    return {
+      sectorLimit: limiteTotal,
+      sectorSpentValue: valorGasto,
+      sectorAvailableBalance: saldoDisponivel
+    };
+  }
+
   const { sectorLimit, sectorSpentValue, sectorAvailableBalance } = useMemo(() => {
-    if (!user || !user.codSetor || setores.length === 0 || !financialData) {
-      return { sectorLimit: 0, sectorSpentValue: 0, sectorAvailableBalance: 0 };
-    }
-    const currentUserSector = setores.find(s => s.CODSETOR === user.codSetor);
-    const limit = currentUserSector?.SALDO || 0;
-    const spent = financialData.gastosPorSetor.find(g => g.CODSETOR === user.codSetor)?.GASTO_TOTAL || 0;
-    const available = limit - spent;
-    return { sectorLimit: limit, sectorSpentValue: spent, sectorAvailableBalance: available };
-  }, [user, setores, financialData]);
+    return computeSectorBudget(user, setores, effectiveFinance);
+  }, [user, setores, effectiveFinance]);
 
   const cartWillExceedLimit = totalValue > sectorAvailableBalance;
 
-  const value = { cartItems, isLoading, error, totalValue, totalItems: itemCount, addToCart, updateQuantity, removeFromCart, submitCart };
+  const value = {
+    cartItems,
+    isLoading,
+    error,
+    totalValue,
+    totalItems: itemCount,
+    addToCart,
+    updateQuantity,
+    removeFromCart,
+    clearCart, // NOVO
+    submitCart
+  };
 
-  return <CartContext.Provider value={{ ...value, sectorLimit, sectorSpentValue, sectorAvailableBalance, cartWillExceedLimit }}>{children}</CartContext.Provider>;
+  return (
+    <CartContext.Provider
+      value={{
+        ...value,
+        sectorLimit,
+        sectorSpentValue,
+        sectorAvailableBalance,
+        cartWillExceedLimit
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
 };
-

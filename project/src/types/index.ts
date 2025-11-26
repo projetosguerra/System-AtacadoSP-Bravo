@@ -52,6 +52,8 @@ export interface Product {
 
 export interface CartItem extends Product {
   quantidade: number;
+  codigoAuxiliar?: string | number | null;
+  subtotal?: number;
 }
 
 export interface PedidoPendente {

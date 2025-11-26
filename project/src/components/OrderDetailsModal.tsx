@@ -220,10 +220,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   const temSatisfacao = !!(data as any)?.satisfacaoResumo;
   const podeAvaliar = temAteste && !temSatisfacao && solicitanteId === usuarioLogadoId;
 
-  const previsaoPadrao = (data as any)?.previsaoEntregaPadrao
-    ? new Date((data as any).previsaoEntregaPadrao)
-    : null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
