@@ -4,9 +4,61 @@ import { withConnection } from '../db/pool.js';
 
 type ContesteStatus = 1 | 2 | 3 | 4 | 9;
 
+type Perfil = 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
+
+function getUserScope(req: any): { perfil: Perfil; codSetor?: number; codUsuario?: number } {
+  const p = String(req?.user?.perfil || '').toUpperCase();
+  const perfil: Perfil = (['ADMIN', 'APROVADOR', 'SOLICITANTE'].includes(p) ? p : 'APROVADOR') as Perfil;
+  const codSetor = Number(req?.user?.codSetor);
+  const codUsuario = Number(req?.user?.codUsuario);
+  return {
+    perfil,
+    ...(Number.isFinite(codSetor) ? { codSetor } : {}),
+    ...(Number.isFinite(codUsuario) ? { codUsuario } : {}),
+  };
+}
+
 interface UserScope {
     codUsuario: number | undefined;
     perfil?: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
+}
+
+export async function getOpenContestsCount(req: any, res: any) {
+  const codcli = Number(process.env.CODCLI ?? 27995);
+  const { perfil, codSetor, codUsuario } = getUserScope(req);
+
+  try {
+    const count = await withConnection(async (connection) => {
+      const binds: Record<string, any> = { codcli };
+      let where = `c.STATUS IN (1,2)`;
+
+      if (perfil === 'SOLICITANTE' && Number.isFinite(codUsuario)) {
+        where += ` AND c.CODUSUARIO_SOLICITANTE = :userId`;
+        binds.userId = codUsuario;
+      } else if (perfil === 'APROVADOR' && Number.isFinite(codSetor)) {
+        where += ` AND u.CODSETOR = :userSetor`;
+        binds.userSetor = codSetor;
+      }
+
+      const sql = `
+        SELECT COUNT(*) AS QTD
+          FROM BRAMV_CONTESTE c
+          JOIN BRAMV_USUARIOS u
+            ON u.CODUSUARIO = c.CODUSUARIO_SOLICITANTE
+           AND u.CODCLI = :codcli
+         WHERE ${where}
+      `;
+
+      const r = await connection.execute(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+      const row: any = r.rows?.[0];
+      return Number(row?.QTD || 0);
+    });
+
+    return res.status(200).json({ open: count });
+  } catch (e: any) {
+    console.error('[contestes][open-count] erro:', e?.message || e);
+    return res.status(200).json({ open: 0 });
+  }
 }
 
 function readUserScope(u: any): UserScope {

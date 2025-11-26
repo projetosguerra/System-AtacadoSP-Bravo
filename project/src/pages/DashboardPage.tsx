@@ -23,15 +23,15 @@ function formatBRL(n: number) {
 }
 function buildWeekWindows(base: Date = new Date()) {
   const endCurrent = new Date(base);
-  endCurrent.setHours(23, 59, 59, 999);
+  endCurrent. setHours(23, 59, 59, 999);
   const startCurrent = new Date(endCurrent);
-  startCurrent.setDate(startCurrent.getDate() - 6);
+  startCurrent.setDate(startCurrent. getDate() - 6);
   startCurrent.setHours(0, 0, 0, 0);
   const endPrev = new Date(startCurrent);
-  endPrev.setDate(endPrev.getDate() - 1);
+  endPrev.setDate(endPrev. getDate() - 1);
   endPrev.setHours(23, 59, 59, 999);
   const startPrev = new Date(endPrev);
-  startPrev.setDate(startPrev.getDate() - 6);
+  startPrev. setDate(startPrev.getDate() - 6);
   startPrev.setHours(0, 0, 0, 0);
   return {
     current: { startTs: startCurrent.getTime(), endTs: endCurrent.getTime() },
@@ -40,7 +40,7 @@ function buildWeekWindows(base: Date = new Date()) {
 }
 
 function buildMonthWindows(base: Date = new Date()) {
-  const currStart = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
+  const currStart = new Date(base. getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
   const currEnd = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
   const prevStart = new Date(base.getFullYear(), base.getMonth() - 1, 1, 0, 0, 0, 0);
   const prevEnd = new Date(base.getFullYear(), base.getMonth(), 0, 23, 59, 59, 999);
@@ -59,23 +59,23 @@ const DashboardPage = () => {
   const week = useMemo(() => buildWeekWindows(), []);
   const month = useMemo(() => buildMonthWindows(), []);
 
-  const pendingTotal = pedidosPendentes.length;
+  const pendingTotal = pedidosPendentes. length;
   const pendingWeekCurr = useMemo(
     () => pedidosPendentes.filter(p => {
-      const t = p?.data ? dayTs(p.data as any) : NaN;
-      return Number.isFinite(t) && inRangeDayTs(t, week.current.startTs, week.current.endTs);
-    }).length,
-    [pedidosPendentes, week.current.startTs, week.current.endTs]
+      const t = p?. data ?  dayTs(p.data as any) : NaN;
+      return Number. isFinite(t) && inRangeDayTs(t, week.current.startTs, week.current.endTs);
+    }). length,
+    [pedidosPendentes, week. current.startTs, week.current.endTs]
   );
   const pendingWeekPrev = useMemo(
-    () => pedidosPendentes.filter(p => {
+    () => pedidosPendentes. filter(p => {
       const t = p?.data ? dayTs(p.data as any) : NaN;
-      return Number.isFinite(t) && inRangeDayTs(t, week.previous.startTs, week.previous.endTs);
+      return Number. isFinite(t) && inRangeDayTs(t, week.previous.startTs, week.previous.endTs);
     }).length,
-    [pedidosPendentes, week.previous.startTs, week.previous.endTs]
+    [pedidosPendentes, week.previous.startTs, week.previous. endTs]
   );
   const pendingDelta = pendingWeekCurr - pendingWeekPrev;
-  const pendingChangeType = pendingDelta > 0 ? 'positive' : pendingDelta < 0 ? 'negative' : 'neutral';
+  const pendingChangeType = pendingDelta > 0 ? 'positive' : pendingDelta < 0 ?  'negative' : 'neutral';
   const pendingSubtitle = pendingDelta === 0
     ? 'igual à semana passada'
     : `${Math.abs(pendingDelta)} ${pendingDelta > 0 ? 'a mais' : 'a menos'} que a semana passada`;
@@ -88,11 +88,11 @@ const DashboardPage = () => {
         const t = o?.data ? dayTs(o.data as any) : NaN;
         return Number.isFinite(t) && inRangeDayTs(t, month.current.startTs, month.current.endTs);
       })
-      .reduce((s, o: any) => s + Number(o?.valorTotal || 0), 0);
-  }, [orders, ordersLoaded, month.current.startTs, month.current.endTs]);
+      .reduce((s, o: any) => s + Number(o?. valorTotal || 0), 0);
+  }, [orders, ordersLoaded, month. current.startTs, month.current.endTs]);
 
   const approvedMonthPrev = useMemo(() => {
-    if (!ordersLoaded) return null;
+    if (! ordersLoaded) return null;
     return (orders || [])
       .filter(o => o?.status === 1)
       .filter(o => {
@@ -102,8 +102,8 @@ const DashboardPage = () => {
       .reduce((s, o: any) => s + Number(o?.valorTotal || 0), 0);
   }, [orders, ordersLoaded, month.previous.startTs, month.previous.endTs]);
 
-  const approvedDelta = (approvedMonthCurr ?? 0) - (approvedMonthPrev ?? 0);
-  const approvedChangeType = approvedDelta > 0 ? 'positive' : approvedDelta < 0 ? 'negative' : 'neutral';
+  const approvedDelta = (approvedMonthCurr ??  0) - (approvedMonthPrev ?? 0);
+  const approvedChangeType = approvedDelta > 0 ?  'positive' : approvedDelta < 0 ? 'negative' : 'neutral';
   const approvedPercent =
     approvedMonthPrev && approvedMonthPrev > 0
       ? ((Number(approvedMonthCurr) - Number(approvedMonthPrev)) / Number(approvedMonthPrev)) * 100
@@ -116,13 +116,13 @@ const DashboardPage = () => {
         : `${approvedPercent.toFixed(1)}% ${approvedDelta > 0 ? 'a mais' : 'a menos'} que o mês passado`;
 
   const newOrdersCurr = useMemo(() => {
-    const hist = (orders || []).filter(o => {
+    const hist = (orders || []). filter(o => {
       const t = o?.data ? dayTs(o.data as any) : NaN;
       return Number.isFinite(t) && inRangeDayTs(t, week.current.startTs, week.current.endTs);
-    }).length;
+    }). length;
     const pend = pedidosPendentes.filter(p => {
       const t = p?.data ? dayTs(p.data as any) : NaN;
-      return Number.isFinite(t) && inRangeDayTs(t, week.current.startTs, week.current.endTs);
+      return Number.isFinite(t) && inRangeDayTs(t, week. current.startTs, week.current.endTs);
     }).length;
     return hist + pend;
   }, [orders, pedidosPendentes, week.current.startTs, week.current.endTs]);
@@ -130,14 +130,14 @@ const DashboardPage = () => {
   const newOrdersPrev = useMemo(() => {
     const hist = (orders || []).filter(o => {
       const t = o?.data ? dayTs(o.data as any) : NaN;
-      return Number.isFinite(t) && inRangeDayTs(t, week.previous.startTs, week.previous.endTs);
+      return Number.isFinite(t) && inRangeDayTs(t, week. previous.startTs, week.previous.endTs);
     }).length;
     const pend = pedidosPendentes.filter(p => {
       const t = p?.data ? dayTs(p.data as any) : NaN;
-      return Number.isFinite(t) && inRangeDayTs(t, week.previous.startTs, week.previous.endTs);
+      return Number.isFinite(t) && inRangeDayTs(t, week. previous.startTs, week.previous.endTs);
     }).length;
     return hist + pend;
-  }, [orders, pedidosPendentes, week.previous.startTs, week.previous.endTs]);
+  }, [orders, pedidosPendentes, week. previous.startTs, week.previous.endTs]);
 
   const newOrdersDelta = newOrdersCurr - newOrdersPrev;
   const newOrdersChangeType = newOrdersDelta > 0 ? 'positive' : newOrdersDelta < 0 ? 'negative' : 'neutral';
@@ -149,56 +149,58 @@ const DashboardPage = () => {
   const contestsSubtitle = `${openContests} Contestes em Análise`;
 
   return (
-    <main className="flex-1 overflow-x-hidden">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <StatsCard
-          title="Pedidos Pendentes"
-          value={String(pendingTotal)}
-          subtitle={pendingSubtitle}
-          icon={Clock}
-          iconBgColor="bg-yellow-500"
-          changeType={pendingChangeType as any}
-        />
-        <StatsCard
-          title="Valor total aprovado (mês)"
-          value={approvedMonthCurr === null ? '...' : formatBRL(Number(approvedMonthCurr))}
-          subtitle={approvedSubtitle}
-          icon={DollarSign}
-          iconBgColor="bg-green-500"
-          changeType={approvedMonthCurr === null ? 'neutral' : (approvedChangeType as any)}
-        />
-        <StatsCard
-          title="Novos Pedidos (semana)"
-          value={String(newOrdersCurr)}
-          subtitle={newOrdersSubtitle}
-          icon={Package}
-          iconBgColor="bg-pink-500"
-          changeType={newOrdersChangeType as any}
-        />
-        <StatsCard
-          title="Conteste Abertos"
-          value={String(openContests)}
-          subtitle={contestsSubtitle}
-          icon={AlertTriangle}
-          iconBgColor="bg-blue-500"
-          changeType="neutral"
-        />
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <VolumeChart />
-        <StatusChart />
-      </div>
-
-      {/* Tabela e Atividades */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          {canSeeApprovalTable ? <QuickApprovalTable /> : <SectorOrdersTable />}
+    <main className="flex-1 overflow-x-hidden bg-gray-50">
+      <div className="w-full space-y-6">
+        {/* Stats Cards - Grid Responsivo com melhor aproveitamento */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <StatsCard
+            title="Pedidos Pendentes"
+            value={String(pendingTotal)}
+            subtitle={pendingSubtitle}
+            icon={Clock}
+            iconBgColor="bg-yellow-500"
+            changeType={pendingChangeType as any}
+          />
+          <StatsCard
+            title="Valor total aprovado (mês)"
+            value={approvedMonthCurr === null ? '.. .' : formatBRL(Number(approvedMonthCurr))}
+            subtitle={approvedSubtitle}
+            icon={DollarSign}
+            iconBgColor="bg-green-500"
+            changeType={approvedMonthCurr === null ? 'neutral' : (approvedChangeType as any)}
+          />
+          <StatsCard
+            title="Novos Pedidos (semana)"
+            value={String(newOrdersCurr)}
+            subtitle={newOrdersSubtitle}
+            icon={Package}
+            iconBgColor="bg-pink-500"
+            changeType={newOrdersChangeType as any}
+          />
+          <StatsCard
+            title="Conteste Abertos"
+            value={String(openContests)}
+            subtitle={contestsSubtitle}
+            icon={AlertTriangle}
+            iconBgColor="bg-blue-500"
+            changeType="neutral"
+          />
         </div>
-        <div>
-          <RecentActivities />
+
+        {/* Charts - Grid Responsivo */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <VolumeChart />
+          <StatusChart />
+        </div>
+
+        {/* Tabelas e Atividades - Grid Responsivo */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div className="lg:col-span-8">
+            {canSeeApprovalTable ?  <QuickApprovalTable /> : <SectorOrdersTable />}
+          </div>
+          <div className="lg:col-span-4">
+            <RecentActivities />
+          </div>
         </div>
       </div>
     </main>

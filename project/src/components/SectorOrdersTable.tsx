@@ -27,7 +27,7 @@ function formatTime(d: any) {
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 function StatusBadge({ s }: { s?: number }) {
-  const base = 'px-2 py-1 rounded-full text-xs font-medium';
+  const base = 'px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap';
   if (s === 1) return <span className={`${base} bg-green-100 text-green-700`}>Aprovado</span>;
   if (s === 2) return <span className={`${base} bg-red-100 text-red-700`}>Reprovado</span>;
   if (s === 3) return <span className={`${base} bg-blue-100 text-blue-700`}>Em Análise</span>;
@@ -35,12 +35,11 @@ function StatusBadge({ s }: { s?: number }) {
   return <span className={`${base} bg-gray-100 text-gray-700`}>N/A</span>;
 }
 
-// Extrai sigla da unidade: "SEADH - Secretaria ..." => "SEADH"
 function extractSigla(text?: string | null) {
   if (!text) return 'N/A';
   const t = String(text).trim();
   const dash = t.indexOf(' - ');
-  if (dash > 0) return t.substring(0, dash).trim();
+  if (dash > 0) return t.substring(0, dash). trim();
   const m = t.match(/^[A-Z]{2,}\b/);
   return m ? m[0] : t;
 }
@@ -62,11 +61,11 @@ export default function SectorOrdersTable() {
     let filtered: Row[] = base as any;
 
     if (userSectorSigla && user?.perfil !== 'Admin') {
-      filtered = filtered.filter(o => extractSigla(o.setor) === userSectorSigla);
+      filtered = filtered. filter(o => extractSigla(o.setor) === userSectorSigla);
     }
 
-    filtered = filtered.slice().sort((a, b) => {
-      const da = new Date(a.data as any).getTime() || 0;
+    filtered = filtered.slice(). sort((a, b) => {
+      const da = new Date(a.data as any). getTime() || 0;
       const db = new Date(b.data as any).getTime() || 0;
       return db - da;
     });
@@ -75,11 +74,11 @@ export default function SectorOrdersTable() {
   }, [ordersLocal, userSectorSigla, user?.perfil]);
 
   async function refresh() {
-    if (!user?.codSetor) return;
+    if (!user?. codSetor) return;
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch('/api/pedidos/historico?days=45&maxrows=400', {
+      const resp = await fetch('/api/pedidos/historico? days=45&maxrows=400', {
         headers: {
           'Cache-Control': 'no-cache',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -96,23 +95,24 @@ export default function SectorOrdersTable() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Pedidos do meu Setor</h3>
+    <div className="bg-white rounded-lg border border-gray-200 p-5 lg:p-6 shadow-sm h-full">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <h3 className="text-base lg:text-lg font-semibold text-gray-900">Pedidos do meu Setor</h3>
         <div className="flex items-center gap-2">
-          {error && <span className="text-xs text-red-600">{error}</span>}
+          {error && <span className="text-xs text-red-600 truncate max-w-[150px]" title={error}>{error}</span>}
           <button
             onClick={refresh}
             disabled={loading}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
             title="Atualizar lista do setor"
+            aria-label="Atualizar pedidos"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
+            <span className="hidden sm:inline">Atualizar</span>
           </button>
           <Link
             to="/pedidos"
-            className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+            className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium whitespace-nowrap"
             title="Ver todos os pedidos"
           >
             Ver todos
@@ -120,50 +120,56 @@ export default function SectorOrdersTable() {
         </div>
       </div>
 
-      {!user?.codSetor && (
-        <div className="text-sm text-gray-500">Seu usuário não está vinculado a um setor.</div>
+      {! user?.codSetor && (
+        <div className="text-sm text-gray-500 text-center py-8">
+          Seu usuário não está vinculado a um setor. 
+        </div>
       )}
 
       {user?.codSetor && isLoading && (
-        <div className="text-sm text-gray-500">Carregando…</div>
+        <div className="text-sm text-gray-500 text-center py-8">Carregando…</div>
       )}
 
       {user?.codSetor && !isLoading && rows.length === 0 && (
-        <div className="text-sm text-gray-500">Nenhum pedido do seu setor encontrado no período.</div>
+        <div className="text-sm text-gray-500 text-center py-8">
+          Nenhum pedido do seu setor encontrado no período. 
+        </div>
       )}
 
       {user?.codSetor && rows.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Data</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Horário</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">ID</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Solicitante</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Qtd</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Valor</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((o) => (
-                <tr key={`my-sector-${o.id}`} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-sm text-gray-900">{formatDate(o.data)}</td>
-                  <td className="px-4 py-2 text-sm text-gray-900">{formatTime(o.data)}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{o.id}</td>
-                  <td className="px-4 py-2 text-sm text-gray-900">{o.solicitante}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{o.qtdItens ?? 0}</td>
-                  <td className="px-4 py-2 text-sm text-gray-900 font-medium">
-                    {brl.format(Number((o as any).valorTotal || 0))}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    <StatusBadge s={o.status} />
-                  </td>
+        <div className="overflow-x-auto -mx-5 sm:mx-0">
+          <div className="inline-block min-w-full align-middle">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Data</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Horário</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">ID</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Solicitante</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Qtd</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Valor</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {rows.map((o) => (
+                  <tr key={`my-sector-${o.id}`} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 text-xs sm:text-sm text-gray-900 whitespace-nowrap">{formatDate(o.data)}</td>
+                    <td className="px-4 py-3 text-xs sm:text-sm text-gray-900 whitespace-nowrap">{formatTime(o.data)}</td>
+                    <td className="px-4 py-3 text-xs sm:text-sm text-gray-600 whitespace-nowrap font-medium">{o.id}</td>
+                    <td className="px-4 py-3 text-xs sm:text-sm text-gray-900 max-w-[150px] truncate" title={o.solicitante}>{o.solicitante}</td>
+                    <td className="px-4 py-3 text-xs sm:text-sm text-gray-600 whitespace-nowrap">{o.qtdItens ??  0}</td>
+                    <td className="px-4 py-3 text-xs sm:text-sm text-gray-900 font-semibold whitespace-nowrap">
+                      {brl.format(Number((o as any).valorTotal || 0))}
+                    </td>
+                    <td className="px-4 py-3 text-xs sm:text-sm whitespace-nowrap">
+                      <StatusBadge s={o.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

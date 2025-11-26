@@ -83,7 +83,7 @@ const Sidebar = () => {
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-50
-          w-72 bg-white shadow-xl lg:shadow-md 
+          w-60 bg-white shadow-xl lg:shadow-md 
           flex flex-col
           transform transition-transform duration-300 ease-in-out
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -110,7 +110,7 @@ const Sidebar = () => {
         </div>
 
         {/* Menu de navegação */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {menuItems.map((item, index) => (
             <NavLink
               key={index}
@@ -120,7 +120,7 @@ const Sidebar = () => {
               end
             >
               <span className="flex-shrink-0">{item.icon}</span>
-              <span className="text-[18px] font-medium">{item.label}</span>
+              <span className="text-[16px] font-medium">{item.label}</span>
             </NavLink>
           ))}
         </nav>

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listarContestes, listarContestesPendentes, criarConteste, analisarConteste } from '../controllers/contesteController.js';
+import { listarContestes, listarContestesPendentes, criarConteste, analisarConteste, getOpenContestsCount } from '../controllers/contesteController.js';
 import { criarContesteSchema, analisarContesteSchema } from '../validators/conteste.js';
 
 const router = Router();
@@ -23,5 +23,7 @@ router.put('/api/conteste/:id/analisar', (req, res, next) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   return analisarConteste(req, res).catch(next);
 });
+
+router.get('/api/contestes/open-count', (req, res, next) => getOpenContestsCount(req, res).catch(next));
 
 export default router;

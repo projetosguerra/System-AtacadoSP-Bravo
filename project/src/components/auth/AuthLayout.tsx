@@ -49,7 +49,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         <div className="w-full h-full flex items-center justify-center">
           <img
             src={bannerImage}
-            alt="Ataercio Comercio Inteligente"
+            alt="Atacado São Paulo Banner"
             className="w-full h-full object-cover"
           />
         </div>

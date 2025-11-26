@@ -6,7 +6,7 @@ import {
   useMemo
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, XCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, XCircle, CheckCircle, Edit, AlertTriangle } from 'lucide-react';
 import { LegacyOrderDetail } from '../types/index';
 import RejectModal from '../components/RejectModal';
 import { useData } from '../context/DataContext';
@@ -21,17 +21,17 @@ function formatCurrency(v: number) {
 }
 
 function statusBadge(status: number) {
+  const baseClass = "inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full";
   switch (status) {
-    case 1: return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">Aprovado</span>;
-    case 2: return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">Reprovado</span>;
-    case 3: return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">Em Análise</span>;
-    case 5: return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>;
-    case 9: return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-gray-200 text-gray-700">Arquivado</span>;
-    default: return <span className="px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-700">Status {status}</span>;
+    case 1: return <span className={`${baseClass} bg-green-100 text-green-800`}>Aprovado</span>;
+    case 2: return <span className={`${baseClass} bg-red-100 text-red-800`}>Reprovado</span>;
+    case 3: return <span className={`${baseClass} bg-blue-100 text-blue-800`}>Em Análise</span>;
+    case 5: return <span className={`${baseClass} bg-yellow-100 text-yellow-800`}>Pendente</span>;
+    case 9: return <span className={`${baseClass} bg-gray-200 text-gray-700`}>Arquivado</span>;
+    default: return <span className={`${baseClass} bg-gray-100 text-gray-700`}>Status {status}</span>;
   }
 }
 
-// Helpers de imagem
 const isPlaceholder = (u?: string) => !!u && /placehold|placeholder|text=Produto/i.test(u);
 const resolveImgUrl = (item: any) => {
   const original = item?.imgUrl as string | undefined;
@@ -46,8 +46,8 @@ const OrderDetailPage = () => {
   const { refetchAllData } = useData();
   const { token } = useAuth();
 
-  function buildHeaders(contentType?: string): Record<string,string> {
-    const h: Record<string,string> = {};
+  function buildHeaders(contentType?: string): Record<string, string> {
+    const h: Record<string, string> = {};
     if (contentType) h['Content-Type'] = contentType;
     if (token) h.Authorization = `Bearer ${token}`;
     return h;
@@ -56,10 +56,8 @@ const OrderDetailPage = () => {
   const [order, setOrder] = useState<LegacyOrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
   const [concatOpen, setConcatOpen] = useState(false);
   const [minValue, setMinValue] = useState<number | null>(null);
   const [baseValue, setBaseValue] = useState<number | null>(null);
@@ -68,18 +66,10 @@ const OrderDetailPage = () => {
   const abortRef = useRef<AbortController | null>(null);
   const committedRef = useRef(false);
 
-  const getQty = (item: any): number => {
-    return Number(item.quantidade ?? item.qt ?? item.QTD ?? item.qty ?? 0) || 0;
-  };
-  const getPrice = (item: any): number => {
-    return Number(item.preco ?? item.precoUnit ?? item.preco_unit ?? item.price ?? 0) || 0;
-  };
-  const getUnit = (item: any): string => {
-    return String(item.unit ?? item.unidade ?? item.UNIDADE ?? '').trim();
-  };
-  const getIdKey = (item: any, idx: number) => {
-    return item.id ?? item.codProd ?? item.CODPROD ?? `r${idx}`;
-  };
+  const getQty = (item: any): number => Number(item.quantidade ?? item.qt ?? item.QTD ?? item.qty ?? 0) || 0;
+  const getPrice = (item: any): number => Number(item.preco ?? item.precoUnit ?? item.preco_unit ?? item.price ?? 0) || 0;
+  const getUnit = (item: any): string => String(item.unit ?? item.unidade ?? item.UNIDADE ?? '').trim();
+  const getIdKey = (item: any, idx: number) => item.id ?? item.codProd ?? item.CODPROD ?? `r${idx}`;
 
   const totalValue = useMemo(() => {
     if (!order?.itens) return 0;
@@ -109,9 +99,7 @@ const OrderDetailPage = () => {
       setIsLoading(true);
       setError(null);
       try {
-        try {
-          abortRef.current?.abort();
-        } catch { }
+        try { abortRef.current?.abort(); } catch { }
         abortRef.current = new AbortController();
         const timeout = setTimeout(() => abortRef.current?.abort(), 12_000);
         const r1 = await fetch(`/api/pedido/${id}`, { signal: abortRef.current.signal });
@@ -133,7 +121,6 @@ const OrderDetailPage = () => {
             }
             throw new Error('Falha ao trancar pedido para análise.');
           }
-          // refetch after lock
           const after = await fetch(`/api/pedido/${id}`, { headers: buildHeaders() });
           if (!after.ok) throw new Error('Pedido não encontrado após lock.');
           const dataAfter = await after.json();
@@ -161,7 +148,7 @@ const OrderDetailPage = () => {
       try { abortRef.current?.abort(); } catch { }
     };
   }, [id, token]);
-  
+
   useEffect(() => {
     let active = true;
     async function loadContext() {
@@ -187,8 +174,7 @@ const OrderDetailPage = () => {
 
   useEffect(() => {
     const unlock = () => {
-      if (!id) return;
-      if (committedRef.current) return;
+      if (!id || committedRef.current) return;
       try {
         const payload = new Blob([JSON.stringify({})], { type: 'application/json' });
         (navigator as any).sendBeacon?.(`/api/pedido/${id}/unlock`, payload);
@@ -209,16 +195,14 @@ const OrderDetailPage = () => {
   }, [id]);
 
   const handleBack = async () => {
-    try {
-      await fetch(`/api/pedido/${id}/unlock`, { method: 'POST' });
-    } catch { }
+    try { await fetch(`/api/pedido/${id}/unlock`, { method: 'POST' }); } catch { }
     navigate('/painel-aprovacao', { state: { forceRefresh: true } });
   };
 
   async function handleApprove() {
     if (submitting || !order) return;
     if (belowMin) {
-      setError('Pedido abaixo do valor mínimo. Concatene antes de aprovar.');
+      setError('Pedido abaixo do valor mínimo.  Concatene antes de aprovar.');
       return;
     }
     setSubmitting(true);
@@ -259,7 +243,7 @@ const OrderDetailPage = () => {
       committedRef.current = true;
       await refetchAllData();
       navigate('/painel-aprovacao', {
-        state: { notice: `Pedido #${id} reprovado.` }
+        state: { notice: `Pedido #${id} reprovado. ` }
       });
     } catch (err: any) {
       setError(`Falha ao reprovar: ${err?.message || 'desconhecido'}`);
@@ -269,9 +253,44 @@ const OrderDetailPage = () => {
     }
   };
 
-  if (isLoading) return <div className="p-8 text-center">Carregando detalhes do pedido...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">Erro: {error}</div>;
-  if (!order) return <div className="p-8 text-center">Pedido não encontrado.</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando detalhes do pedido...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-50">
+        <div className="text-center bg-white rounded-lg shadow-sm border border-red-200 p-8 max-w-md">
+          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Erro ao Carregar Pedido</h2>
+          <p className="text-sm text-red-600 mb-4">{error}</p>
+          <button
+            onClick={handleBack}
+            className="px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors"
+          >
+            Voltar ao Painel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-50">
+        <div className="text-center">
+          <p className="text-gray-600">Pedido não encontrado.</p>
+        </div>
+      </div>
+    );
+  }
 
   const canConcat =
     (order.status === 5 || order.status === 3) &&
@@ -280,144 +299,208 @@ const OrderDetailPage = () => {
     (order as any).concatRole !== 'ORIGEM';
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <button onClick={handleBack} className="inline-flex items-center hover:text-gray-900">
-            <ArrowLeft size={16} /> Voltar ao Painel
+    <div className="flex-1 overflow-x-hidden bg-gray-50">
+      <div className="w-full space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <button
+            onClick={handleBack}
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar ao Painel
           </button>
+
+          {(order as any)?.concatRole && (
+            <div>
+              {(order as any).concatRole === 'RESULTADO' && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                  Pedido Concatenado (Novo) • Grupo {(order as any).concatGroupId}
+                </span>
+              )}
+              {(order as any).concatRole === 'ORIGEM' && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
+                  Origem de Concatenação • Grupo {(order as any).concatGroupId}
+                </span>
+              )}
+            </div>
+          )}
         </div>
-        {(order as any)?.concatRole && (
-          <div>
-            {(order as any).concatRole === 'RESULTADO' && (
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                Pedido Concatenado (Novo) • Grupo {(order as any).concatGroupId}
-              </span>
-            )}
-            {(order as any).concatRole === 'ORIGEM' && (
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
-                Origem de Concatenação • Grupo {(order as any).concatGroupId}
-              </span>
-            )}
+
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
+          Análise do Pedido #{order.id}
+        </h1>
+
+        {/* Card de Informações do Pedido */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 lg:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Solicitante</h3>
+              <p className="text-base font-medium text-gray-900">{order.solicitante.nome}</p>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Unidade</h3>
+              <p className="text-base font-medium text-gray-900">{order.unidadeAdmin}</p>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Data</h3>
+              <p className="text-base font-medium text-gray-900">
+                {new Date(order.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Status</h3>
+              <div>{statusBadge(order.status)}</div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
 
-      <h1 className="text-3xl font-bold text-gray-900">Análise do Pedido #{order.id}</h1>
+        {/* Tabela de Itens */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-5 lg:px-6 py-4 border-b border-gray-200">
+            <h2 className="text-base lg:text-lg font-semibold text-gray-900">Itens do Pedido</h2>
+          </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border grid grid-cols-4 gap-6">
-        <div>
-          <h3 className="text-sm font-medium text-gray-500">Solicitante</h3>
-          <p className="mt-1 text-lg">{order.solicitante.nome}</p>
-        </div>
-        <div>
-          <h3 className="text-sm font-medium text-gray-500">Unidade</h3>
-          <p className="mt-1 text-lg">{order.unidadeAdmin}</p>
-        </div>
-        <div>
-          <h3 className="text-sm font-medium text-gray-500">Data</h3>
-          <p className="mt-1 text-lg">{new Date(order.data).toLocaleDateString('pt-BR')}</p>
-        </div>
-        <div>
-          <h3 className="text-sm font-medium text-gray-500">Status</h3>
-          <div className="mt-1">{statusBadge(order.status)}</div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Produto</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Código</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Qtd.</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Un.</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {order.itens.map((item: any, idx: number) => {
-              const qty = getQty(item);
-              const price = getPrice(item);
-              const subtotal = +(qty * price);
-              return (
-                <tr key={getIdKey(item, idx)}>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <img src={resolveImgUrl(item)} alt={item.nome} className="w-12 h-12 rounded object-cover" />
-                      <span>{item.nome}</span>
-                    </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Produto</th>
+                  <th scope="col" className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Código</th>
+                  <th scope="col" className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Qtd. </th>
+                  <th scope="col" className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Valor Un.</th>
+                  <th scope="col" className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {order.itens.map((item: any, idx: number) => {
+                  const qty = getQty(item);
+                  const price = getPrice(item);
+                  const subtotal = +(qty * price);
+                  return (
+                    <tr key={getIdKey(item, idx)} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 lg:px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={resolveImgUrl(item)}
+                            alt={item.nome}
+                            className="w-12 h-12 lg:w-14 lg:h-14 rounded-lg object-cover border border-gray-200 flex-shrink-0"
+                          />
+                          <span className="text-sm text-gray-900 line-clamp-2">{item.nome}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 text-sm text-gray-600 font-medium whitespace-nowrap">{item.codProd}</td>
+                      <td className="px-4 lg:px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                        {qty} {getUnit(item)}
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 text-sm text-gray-900 font-medium whitespace-nowrap">{formatCurrency(price)}</td>
+                      <td className="px-4 lg:px-6 py-4 text-sm text-gray-900 font-semibold whitespace-nowrap">
+                        {formatCurrency(subtotal)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+                <tr>
+                  <td colSpan={4} className="px-4 lg:px-6 py-4 text-right text-sm font-bold text-gray-900 uppercase">
+                    Valor Total:
                   </td>
-                  <td className="px-6 py-4">{item.codProd}</td>
-                  <td className="px-6 py-4">{qty} {getUnit(item)}</td>
-                  <td className="px-6 py-4">{formatCurrency(price)}</td>
-                  <td className="px-6 py-4 font-semibold">
-                    {formatCurrency(subtotal)}
+                  <td className="px-4 lg:px-6 py-4 text-left text-lg font-bold text-gray-900">
+                    {formatCurrency(totalValue)}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-          <tfoot className="bg-gray-100 font-bold">
-            <tr>
-              <td colSpan={4} className="px-6 py-4 text-right">VALOR TOTAL:</td>
-              <td className="px-6 py-4 text-left text-xl">{formatCurrency(totalValue)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      {/* Botão Editar se em análise ou pendente */}
-      {(order.status === 5 || order.status === 3) && (
-        <button
-          onClick={() => navigate(`/pedido/${order.id}/editar`)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Editar Pedido
-        </button>
-      )}
-
-      {(order.status === 5 || order.status === 3) && (
-        <div className="bg-white p-4 rounded-lg border text-sm text-gray-700 flex flex-col gap-1">
-          <div>
-            Mínimo exigido: <strong>{formatCurrency(minValue ?? MIN_VALUE_FALLBACK)}</strong> • Valor do pedido: <strong>{formatCurrency(baseValue ?? totalValue)}</strong> •
-            {belowMin
-              ? <span className="text-red-600 ml-1">Abaixo do mínimo — é necessário concatenar.</span>
-              : <span className="text-green-600 ml-1">Acima do mínimo — pode aprovar.</span>}
+              </tfoot>
+            </table>
           </div>
-          {contextError && <div className="text-xs text-red-600">Contexto parcial: {contextError}</div>}
         </div>
-      )}
 
-      <div className="bg-white p-4 rounded-lg shadow-sm border flex flex-wrap justify-end gap-4">
-        <button
-          onClick={() => setIsRejectModalOpen(true)}
-          disabled={submitting}
-          className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-        >
-          <XCircle size={20} /> Reprovar
-        </button>
-
-        {canConcat && (
-          <button
-            onClick={() => setConcatOpen(true)}
-            disabled={submitting}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-            title="Concatenar com outros pedidos pendentes da mesma unidade"
-          >
-            Concatenar
-          </button>
+        {/* Botão Editar */}
+        {(order.status === 5 || order.status === 3) && (
+          <div className="flex justify-start">
+            <button
+              onClick={() => navigate(`/pedido/${order.id}/editar`)}
+              className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm text-sm"
+            >
+              <Edit className="w-4 h-4" />
+              Editar Pedido
+            </button>
+          </div>
         )}
 
-        <button
-          onClick={handleApprove}
-          disabled={submitting || belowMin}
-          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-        >
-          <CheckCircle size={20} /> {submitting ? 'Aprovando...' : 'Aprovar'}
-        </button>
+        {/* Info sobre Mínimo */}
+        {(order.status === 5 || order.status === 3) && (
+          <div className={`rounded-lg border-2 p-4 ${belowMin ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${belowMin ? 'text-red-600' : 'text-green-600'}`} />
+              <div className="text-sm">
+                <p className="font-semibold text-gray-900 mb-1">
+                  Mínimo exigido: <span className="text-blue-600">{formatCurrency(minValue ?? MIN_VALUE_FALLBACK)}</span> •
+                  Valor do pedido: <span className="text-blue-600">{formatCurrency(baseValue ?? totalValue)}</span>
+                </p>
+                {belowMin ? (
+                  <p className="text-red-700">
+                    <strong>Abaixo do mínimo</strong> — é necessário concatenar antes de aprovar.
+                  </p>
+                ) : (
+                  <p className="text-green-700">
+                    ✓ <strong>Acima do mínimo</strong> — pode aprovar diretamente.
+                  </p>
+                )}
+                {contextError && (
+                  <p className="text-xs text-gray-600 mt-2">Contexto parcial: {contextError}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="p-4 rounded-lg border-2 border-red-300 bg-red-50">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Ações */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 lg:p-6">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
+            <button
+              onClick={() => setIsRejectModalOpen(true)}
+              disabled={submitting}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 shadow-sm text-sm"
+            >
+              <XCircle className="w-5 h-5" />
+              Reprovar
+            </button>
+
+            {canConcat && (
+              <button
+                onClick={() => setConcatOpen(true)}
+                disabled={submitting}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 shadow-sm text-sm"
+                title="Concatenar com outros pedidos pendentes da mesma unidade"
+              >
+                Concatenar Pedidos
+              </button>
+            )}
+
+            <button
+              onClick={handleApprove}
+              disabled={submitting || belowMin}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 shadow-sm text-sm"
+            >
+              <CheckCircle className="w-5 h-5" />
+              {submitting ? 'Aprovando...' : 'Aprovar Pedido'}
+            </button>
+          </div>
+        </div>
       </div>
 
+      {/* Modals */}
       <RejectModal
         isOpen={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
@@ -433,7 +516,7 @@ const OrderDetailPage = () => {
           committedRef.current = true;
           setConcatOpen(false);
           navigate(`/pedido/${newId}`, {
-            state: { notice: `Pedido #${newId} criado por concatenação.` }
+            state: { notice: `Pedido #${newId} criado por concatenação. ` }
           });
         }}
       />

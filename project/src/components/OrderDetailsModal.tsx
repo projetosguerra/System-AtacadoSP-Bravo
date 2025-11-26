@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Package, DollarSign, Calendar, User } from 'lucide-react';
 import { fetchPedidoDetalhe, fetchPedidoFinanceiro, fetchPedidoTransportadora } from '../api/pedidos';
 import { PedidoDetalhe } from '../types/pedidos';
 import PedidoTimeline from './PedidoTimeline';
@@ -30,7 +30,7 @@ function formatDateTime(dt?: string) {
   const d = new Date(dt);
   if (isNaN(d.getTime())) return { date: '-', time: '-' };
   return {
-    date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+    date: d. toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
     time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   };
 }
@@ -96,7 +96,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   const [ultimoConteste, setUltimoConteste] = useState<ContesteResumo | null>(null);
 
   useEffect(() => {
-    if (!open || pedidoId == null) {
+    if (! open || pedidoId == null) {
       setData(null);
       setErro(null);
       setLoading(false);
@@ -107,13 +107,13 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
     setErro(null);
     fetchPedidoDetalhe(pedidoId, ac.signal)
       .then((d: React.SetStateAction<PedidoDetalhe | null>) => setData(d))
-      .catch((e: { message: React.SetStateAction<string | null>; }) => { if (!ac.signal.aborted) setErro(e.message); })
+      .catch((e: { message: React.SetStateAction<string | null>; }) => { if (! ac.signal.aborted) setErro(e.message); })
       .finally(() => { if (!ac.signal.aborted) setLoading(false); });
     return () => ac.abort();
   }, [open, pedidoId]);
 
   useEffect(() => {
-    if (!open || pedidoId == null) {
+    if (! open || pedidoId == null) {
       setFinanceiro(null);
       setTransportadora(null);
       return;
@@ -127,15 +127,15 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
         const fin = await fetchPedidoFinanceiro(pedidoId, ac2.signal);
         setFinanceiro(fin);
       } catch (e: any) {
-        console.warn('[Modal] erro ao carregar financeiro:', e?.message || e);
+        console.warn('[Modal] erro ao carregar financeiro:', e?. message || e);
         setFinanceiro(null);
       }
 
       try {
         const tr = await fetchPedidoTransportadora(pedidoId, ac2.signal);
-        setTransportadora(tr?.transportadora ?? tr ?? null);
+        setTransportadora(tr?. transportadora ??  tr ??  null);
       } catch (e: any) {
-        console.warn('[Modal] erro ao carregar transportadora:', e?.message || e);
+        console. warn('[Modal] erro ao carregar transportadora:', e?.message || e);
         setTransportadora(null);
       }
     })();
@@ -146,7 +146,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   }, [open, pedidoId]);
 
   useEffect(() => {
-    if (!open || !data || data.status !== 2) {
+    if (! open || ! data || data.status !== 2) {
       setUltimoConteste(null);
       setContestError(null);
       return;
@@ -154,14 +154,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
     const ac3 = new AbortController();
     setContestLoading(true);
     setContestError(null);
-    fetchContestes(data.id, token ?? undefined, ac3.signal)
+    fetchContestes(data.id, token ??  undefined, ac3.signal)
       .then((list: string | any[]) => {
-        const first = list && list.length ? list[0] : null;
+        const first = list && list.length ?  list[0] : null;
         if (first) {
           setUltimoConteste({
             id: first.id,
             status: first.status,
-            justificativa: first.justificativa,
+            justificativa: first. justificativa,
             dataCriacao: first.dataCriacao,
             motivoReprovacao: first.motivoReprovacao,
             parecer: first.parecer,
@@ -172,8 +172,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
         }
       })
       .catch((err: { message: any; }) => {
-        if (!ac3.signal.aborted) {
-          setContestError(err?.message || 'Falha ao carregar conteste.');
+        if (! ac3.signal.aborted) {
+          setContestError(err?. message || 'Falha ao carregar conteste.');
           setUltimoConteste(null);
         }
       })
@@ -182,25 +182,25 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   }, [open, data, token]);
 
   const somaLocal = useMemo(() => {
-    if (!data?.itens) return 0;
+    if (!data?. itens) return 0;
     return (data.itens as any[]).reduce((sum, it) => sum + Number(it.subtotal || 0), 0);
   }, [data?.itens]);
 
-  if (!open) return null;
+  if (! open) return null;
 
-  const dt = formatDateTime(data?.data);
-  const statusText = data?.statusLabel || (data ? statusLabelFallback[data.status] : '');
+  const dt = formatDateTime(data?. data);
+  const statusText = data?.statusLabel || (data ?  statusLabelFallback[data.status] : '');
   const divergencia = data && Math.abs(Number(data.valorTotal) - somaLocal) > 0.009;
 
   const solicitanteId = data?.solicitante?.id;
   const usuarioLogadoId =
     (user as any)?.codUsuario ??
-    (user as any)?.CODUSUARIO ??
+    (user as any)?. CODUSUARIO ??
     (user as any)?.id ??
     (user as any)?.ID;
 
   const contesteStatusPedido = data?.contesteStatus;
-  const contesteEmAndamento = contesteStatusPedido === 1 || (ultimoConteste && [1, 2].includes(ultimoConteste.status));
+  const contesteEmAndamento = contesteStatusPedido === 1 || (ultimoConteste && [1, 2]. includes(ultimoConteste.status));
   const canContest =
     data?.status === 2 &&
     solicitanteId &&
@@ -210,37 +210,36 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
     !ultimoConteste;
 
   const pedidoAprovado = data?.status === 1;
-  const semAteste = !(data as any)?.atesteResumo;
+  const semAteste = !(data as any)?. atesteResumo;
   const canAtestar = pedidoAprovado && semAteste && solicitanteId && usuarioLogadoId && solicitanteId === usuarioLogadoId;
 
   const showContesteBadge = !!ultimoConteste;
   const badgeStatus = ultimoConteste?.status;
 
-  const temAteste = !!(data as any)?.atesteResumo;
+  const temAteste = ! !(data as any)?.atesteResumo;
   const temSatisfacao = !!(data as any)?.satisfacaoResumo;
-  const podeAvaliar = temAteste && !temSatisfacao && solicitanteId === usuarioLogadoId;
+  const podeAvaliar = temAteste && ! temSatisfacao && solicitanteId === usuarioLogadoId;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-5xl rounded-lg shadow-xl z-10 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
+      <div className="relative bg-white w-full max-w-6xl rounded-xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold">
-              {data ? `Detalhes do Pedido #${data.id}` : (pedidoId !== null ? `Pedido #${pedidoId}` : 'Detalhes do Pedido')}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className="text-lg font-bold text-gray-900">
+              {data ?  `Pedido #${data.id}` : (pedidoId !== null ? `Pedido #${pedidoId}` : 'Detalhes do Pedido')}
             </h3>
             {showContesteBadge && badgeStatus && (
               <span
-                className={`px-2 py-1 rounded text-xs font-medium ${badgeClassByContesteStatus[badgeStatus] || 'bg-gray-100 text-gray-700'}`}
+                className={`px-2. 5 py-1 rounded-full text-xs font-semibold ${badgeClassByContesteStatus[badgeStatus] || 'bg-gray-100 text-gray-700'}`}
                 title={ultimoConteste?.justificativa}
               >
                 {contesteStatusLabel[badgeStatus] || `Conteste (${badgeStatus})`}
               </span>
             )}
-            {(data as any)?.atesteResumo && (
+            {(data as any)?. atesteResumo && (
               <span
-                className={`px-2 py-1 rounded text-xs font-medium ${(data as any).atesteResumo.recebidoOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                className={`px-2. 5 py-1 rounded-full text-xs font-semibold ${(data as any). atesteResumo.recebidoOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}
                 title={(data as any).atesteResumo.comentario || undefined}
               >
@@ -252,16 +251,16 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
             {canAtestar && (
               <button
                 onClick={() => setAtesteOpen(true)}
-                className="px-3 py-1.5 rounded bg-green-600 text-white text-sm hover:bg-green-700"
+                className="px-3 py-1. 5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
                 title="Confirmar recebimento deste pedido"
               >
-                Atestar recebimento
+                Atestar
               </button>
             )}
             {canContest && (
               <button
                 onClick={() => setContestOpen(true)}
-                className="px-3 py-1.5 rounded bg-red-600 text-white text-sm hover:bg-red-700"
+                className="px-3 py-1. 5 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
                 title="Contestar reprovação deste pedido"
               >
                 Contestar
@@ -270,102 +269,132 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
             {podeAvaliar && (
               <button
                 onClick={() => setSatisfacaoOpen(true)}
-                className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
+                className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
                 title="Avaliar satisfação do recebimento"
               >
-                Avaliar recebimento
+                Avaliar
               </button>
             )}
-            <button onClick={onClose} className="p-2 rounded hover:bg-gray-100" aria-label="Fechar">
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Fechar">
               <X className="w-5 h-5 text-gray-600" />
             </button>
           </div>
         </div>
 
         {/* Corpo */}
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {loading && (
-            <div className="text-sm text-gray-600 animate-pulse">Carregando detalhes...</div>
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
+              <p className="text-sm text-gray-600">Carregando detalhes... </p>
+            </div>
           )}
-          {erro && !loading && (
-            <div className="text-sm text-red-600">Erro: {erro}</div>
-          )}
-
-          {temSatisfacao && (
-            <div className="p-3 rounded-md bg-blue-50 border border-blue-200 text-sm text-blue-800">
-              <strong>Satisfação do recebimento:</strong> Nota {(data as any).satisfacaoResumo?.rating ?? '-'}
-              {(data as any).satisfacaoResumo?.comentario && (
-                <div className="mt-1 text-xs"><strong>Comentário:</strong> {(data as any).satisfacaoResumo?.comentario}</div>
-              )}
+          {erro && ! loading && (
+            <div className="p-4 rounded-lg border-2 border-red-300 bg-red-50">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 font-medium">Erro: {erro}</p>
+              </div>
             </div>
           )}
 
-          {/* Aviso de conteste em andamento */}
-          {data?.status === 2 && contesteEmAndamento && (
-            <div className="p-3 rounded-md bg-yellow-50 border border-yellow-200 text-xs text-yellow-800">
+          {temSatisfacao && (
+            <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+              <div className="flex items-start gap-3">
+                <DollarSign className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-semibold mb-1">Satisfação do Recebimento</p>
+                  <p>Nota: <strong>{(data as any).satisfacaoResumo?. rating ??  '-'}</strong></p>
+                  {(data as any).satisfacaoResumo?.comentario && (
+                    <p className="mt-1 text-xs"><strong>Comentário:</strong> {(data as any).satisfacaoResumo?. comentario}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {data?. status === 2 && contesteEmAndamento && (
+            <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-800">
               Há uma contestação em andamento para este pedido.
             </div>
           )}
 
-          {!loading && !erro && data && (
+          {! loading && !erro && data && (
             <>
-              {/* Header informativo */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <div className="text-xs text-gray-500">Data</div>
-                  <div className="font-medium">{dt.date}</div>
+              {/* Cards de Informação */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 text-gray-500 mb-1">
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-xs uppercase font-medium">Data</span>
+                  </div>
+                  <div className="font-semibold text-gray-900">{dt. date}</div>
+                  <div className="text-xs text-gray-600 font-mono">{dt.time}</div>
                 </div>
-                <div>
-                  <div className="text-xs text-gray-500">Horário</div>
-                  <div className="font-medium">{dt.time}</div>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 text-gray-500 mb-1">
+                    <Package className="w-4 h-4" />
+                    <span className="text-xs uppercase font-medium">Status</span>
+                  </div>
+                  <div className="font-semibold text-gray-900">{statusText}</div>
                 </div>
-                <div>
-                  <div className="text-xs text-gray-500">Status</div>
-                  <div className="font-medium">{statusText}</div>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 text-gray-500 mb-1">
+                    <User className="w-4 h-4" />
+                    <span className="text-xs uppercase font-medium">Solicitante</span>
+                  </div>
+                  <div className="font-semibold text-gray-900 truncate" title={data.solicitante?. nome}>{data.solicitante?.nome || '-'}</div>
                 </div>
-                <div>
-                  <div className="text-xs text-gray-500">Solicitante</div>
-                  <div className="font-medium truncate" title={data.solicitante?.nome}>{data.solicitante?.nome || '-'}</div>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 text-gray-500 mb-1">
+                    <Package className="w-4 h-4" />
+                    <span className="text-xs uppercase font-medium">Unidade</span>
+                  </div>
+                  <div className="font-semibold text-gray-900 truncate" title={data.unidadeAdmin}>{data.unidadeAdmin || '-'}</div>
                 </div>
-                <div>
-                  <div className="text-xs text-gray-500">Unidade Administrativa</div>
-                  <div className="font-medium truncate" title={data.unidadeAdmin}>{data.unidadeAdmin || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500">Valor Total (servidor)</div>
-                  <div className="font-medium">{formatCurrency(data.valorTotal)}</div>
+                <div className="bg-green-50 rounded-lg p-4 border-2 border-green-200 sm:col-span-2">
+                  <div className="flex items-center gap-2 text-green-600 mb-1">
+                    <DollarSign className="w-4 h-4" />
+                    <span className="text-xs uppercase font-medium">Valor Total</span>
+                  </div>
+                  <div className="font-bold text-xl text-green-700">{formatCurrency(data. valorTotal)}</div>
                 </div>
               </div>
 
               {/* Motivo reprovação */}
-              {data.status === 2 && data.reprovacaoMotivo && (
-                <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
-                  <strong>Motivo da reprovação:</strong> {data.reprovacaoMotivo}
+              {data. status === 2 && data.reprovacaoMotivo && (
+                <div className="p-4 rounded-lg border-2 border-red-300 bg-red-50">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-red-800">
+                      <p className="font-semibold mb-1">Motivo da Reprovação</p>
+                      <p>{data.reprovacaoMotivo}</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* Último conteste finalizado */}
+              {/* Resultado do conteste */}
               {ultimoConteste && [3, 4].includes(ultimoConteste.status) && (
                 <div
                   className={
-                    `p-3 rounded-md border text-sm ` +
+                    `p-4 rounded-lg border-2 text-sm ` +
                     (ultimoConteste.status === 3
                       ? 'bg-green-50 border-green-200 text-green-800'
                       : 'bg-red-50 border-red-200 text-red-800')
                   }
                 >
-                  <strong>Resultado da contestação:</strong>{' '}
-                  {ultimoConteste.status === 3 ? 'Deferido' : 'Indeferido'}
+                  <p className="font-semibold mb-1">
+                    Resultado da Contestação: {ultimoConteste.status === 3 ? 'Deferido' : 'Indeferido'}
+                  </p>
                   {ultimoConteste.parecer && (
-                    <div className="mt-1 text-xs">
-                      <strong>Parecer:</strong> {ultimoConteste.parecer}
-                    </div>
+                    <p className="text-xs mt-1"><strong>Parecer:</strong> {ultimoConteste.parecer}</p>
                   )}
                 </div>
               )}
 
-              {/* Painel para aprovador analisar quando pendente */}
-              {ultimoConteste && (user?.tipoUsuario === 1 || user?.tipoUsuario === 2 || ['ADMIN', 'APROVADOR'].includes(String(user?.perfil || '').toUpperCase())) && (
+              {/* Painel de análise de conteste (aprovador) */}
+              {ultimoConteste && (user?. tipoUsuario === 1 || user?.tipoUsuario === 2 || ['ADMIN', 'APROVADOR'].includes(String(user?.perfil || ''). toUpperCase())) && (
                 <ContestReviewPanel
                   conteste={{
                     id: ultimoConteste.id,
@@ -376,30 +405,32 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                   }}
                   pedidoId={data.id}
                   onDone={() => {
-                    fetchPedidoDetalhe(data.id).then(setData).catch(() => { });
-                    fetchContestes(data.id, token ?? undefined).then((list: string | any[]) => {
+                    fetchPedidoDetalhe(data.id). then(setData). catch(() => { });
+                    fetchContestes(data.id, token ??  undefined). then((list: string | any[]) => {
                       const first = list && list.length ? list[0] : null;
-                      setUltimoConteste(first ? {
-                        id: first.id,
+                      setUltimoConteste(first ?  {
+                        id: first. id,
                         status: first.status,
                         justificativa: first.justificativa,
                         dataCriacao: first.dataCriacao,
                         motivoReprovacao: first.motivoReprovacao,
                         parecer: first.parecer,
-                        dataAnalise: first.dataAnalise || null
+                        dataAnalise: first. dataAnalise || null
                       } : null);
-                    }).catch(() => { });
+                    }). catch(() => { });
                   }}
                 />
               )}
 
               {/* Divergência */}
               {divergencia && (
-                <div className="flex items-start gap-2 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
-                  <AlertTriangle className="w-4 h-4 mt-0.5" />
-                  <div>
-                    Diferença entre valorTotal do servidor ({formatCurrency(data.valorTotal)}) e soma local ({formatCurrency(somaLocal)}).
-                    Recalcular será necessário ao editar itens. (Tolerância ±0,01)
+                <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                  <div className="flex items-start gap-2 text-sm text-yellow-800">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <p>
+                      Diferença entre valorTotal do servidor ({formatCurrency(data.valorTotal)}) e soma local ({formatCurrency(somaLocal)}).
+                      <span className="block text-xs mt-1">Tolerância: ±0,01</span>
+                    </p>
                   </div>
                 </div>
               )}
@@ -408,51 +439,54 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
 
               {/* Itens */}
               <div className="space-y-3">
-                <h4 className="font-semibold text-gray-800">Itens ({data.itens.length})</h4>
+                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-gray-600" />
+                  Itens do Pedido ({data.itens.length})
+                </h4>
 
                 {/* Desktop */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm border border-gray-200 rounded-lg">
+                <div className="hidden md:block overflow-x-auto border border-gray-200 rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">Produto</th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-600">Unidade</th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-600">Qtd</th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-600">Preço Unit.</th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-600">Subtotal</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Produto</th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Unidade</th>
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Qtd</th>
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Preço Unit.</th>
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Subtotal</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="bg-white divide-y divide-gray-200">
                       {data.itens.map(it => (
-                        <tr key={it.codProd} className="border-t last:border-b">
-                          <td className="px-3 py-2">
+                        <tr key={it.codProd} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
                               <img
                                 src={buildPedidoImgUrl(it)}
                                 onError={(e) => onImgError(e, it)}
                                 alt={it.nome}
-                                className="w-14 h-14 object-cover rounded border border-gray-200 bg-white"
+                                className="w-16 h-16 object-cover rounded-lg border border-gray-200 bg-white flex-shrink-0"
                                 loading="lazy"
                               />
                               <div className="min-w-0">
-                                <div className="font-medium truncate" title={it.nome}>{it.nome}</div>
+                                <div className="font-medium text-sm truncate" title={it.nome}>{it.nome}</div>
                                 <div className="text-xs text-gray-500">
-                                  Código: {it.codProd} | Aux: {it.codigoAuxiliar ?? '—'}
+                                  Cód: {it.codProd} | Aux: {it.codigoAuxiliar ??  '—'}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-gray-700">{it.unidade}</td>
-                          <td className="px-3 py-2 text-right">{it.qt}</td>
-                          <td className="px-3 py-2 text-right">{formatCurrency(it.precoUnit)}</td>
-                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(it.subtotal)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{it.unidade}</td>
+                          <td className="px-4 py-3 text-sm text-right font-medium">{it.qt}</td>
+                          <td className="px-4 py-3 text-sm text-right">{formatCurrency(it.precoUnit)}</td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold text-green-600">{formatCurrency(it. subtotal)}</td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot>
-                      <tr className="bg-gray-50">
-                        <td colSpan={4} className="px-3 py-2 text-right font-medium">Total (calculado)</td>
-                        <td className="px-3 py-2 text-right font-semibold">{formatCurrency(somaLocal)}</td>
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+                      <tr>
+                        <td colSpan={4} className="px-4 py-3 text-right font-bold text-gray-900">Total Calculado:</td>
+                        <td className="px-4 py-3 text-right font-bold text-lg text-green-600">{formatCurrency(somaLocal)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -461,32 +495,35 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 {/* Mobile */}
                 <div className="md:hidden space-y-3">
                   {data.itens.map(it => (
-                    <div key={it.codProd} className="border border-gray-200 rounded-lg p-3 flex gap-3">
-                      <img
-                        src={buildPedidoImgUrl(it)}
-                        onError={(e) => onImgError(e, it)}
-                        alt={it.nome}
-                        className="w-16 h-16 object-cover rounded border border-gray-200 bg-white"
-                        loading="lazy"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate" title={it.nome}>{it.nome}</div>
-                        <div className="text-xs text-gray-500 truncate">
-                          Código {it.codProd} • Aux {it.codigoAuxiliar ?? '—'}
+                    <div key={it. codProd} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      <div className="flex gap-3 mb-2">
+                        <img
+                          src={buildPedidoImgUrl(it)}
+                          onError={(e) => onImgError(e, it)}
+                          alt={it.nome}
+                          className="w-20 h-20 object-cover rounded-lg border border-gray-200 bg-white flex-shrink-0"
+                          loading="lazy"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm mb-1" title={it.nome}>{it.nome}</div>
+                          <div className="text-xs text-gray-500">
+                            Cód {it.codProd} • Aux {it.codigoAuxiliar ?? '—'}
+                          </div>
                         </div>
-                        <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                          <span className="px-2 py-0.5 bg-gray-100 rounded">{it.unidade}</span>
-                          <span className="px-2 py-0.5 bg-gray-100 rounded">Qtd {it.qt}</span>
-                          <span className="px-2 py-0.5 bg-gray-100 rounded">Unit {formatCurrency(it.precoUnit)}</span>
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">
-                            {formatCurrency(it.subtotal)}
-                          </span>
-                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <span className="px-2 py-1 bg-white border rounded">{it.unidade}</span>
+                        <span className="px-2 py-1 bg-white border rounded">Qtd {it.qt}</span>
+                        <span className="px-2 py-1 bg-white border rounded">Unit {formatCurrency(it.precoUnit)}</span>
+                        <span className="px-2 py-1 bg-green-100 text-green-700 border border-green-200 rounded font-semibold">
+                          {formatCurrency(it.subtotal)}
+                        </span>
                       </div>
                     </div>
                   ))}
-                  <div className="text-right text-sm font-semibold">
-                    Total (calculado): {formatCurrency(somaLocal)}
+                  <div className="text-right">
+                    <span className="text-sm text-gray-700">Total: </span>
+                    <span className="text-lg font-bold text-green-600">{formatCurrency(somaLocal)}</span>
                   </div>
                 </div>
               </div>
@@ -494,70 +531,51 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
               {/* Transportadora */}
               {transportadora && (
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-800">Entrega / Transportadora</h4>
-                  <div className="text-sm text-gray-700 grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-xs text-gray-500">Transportadora</div>
-                      <div className="font-medium">
-                        {transportadora.transportadora ?? '—'}
+                  <h4 className="font-semibold text-gray-900">Entrega / Transportadora</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Transportadora', value: transportadora.transportadora ??  '—' },
+                      { label: 'Frete', value: formatCurrency(transportadora.vlFrete ??  0) },
+                      { label: 'Entrega prevista', value: transportadora.dtEntrega ?  new Date(transportadora.dtEntrega).toLocaleDateString('pt-BR') : '—' },
+                      { label: 'Nota / Trans.', value: transportadora.numNota ?? transportadora. NUMNOTA ??  transportadora.numTransVenda ?? transportadora. NUMTRANSVENDA ?? '—' }
+                    ].map((item, idx) => (
+                      <div key={idx} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div className="text-xs text-gray-500 uppercase mb-1">{item.label}</div>
+                        <div className="font-medium text-sm text-gray-900 truncate" title={String(item.value)}>{item. value}</div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">Frete</div>
-                      <div className="font-medium">
-                        {formatCurrency(transportadora.vlFrete ?? 0)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">Entrega prevista</div>
-                      <div className="font-medium">
-                        {transportadora.dtEntrega
-                          ? new Date(transportadora.dtEntrega).toLocaleDateString('pt-BR')
-                          : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">Nota / Trans. Venda</div>
-                      <div className="font-medium">
-                        {transportadora.numNota ?? transportadora.NUMNOTA ?? transportadora.numTransVenda ?? transportadora.NUMTRANSVENDA ?? '—'}
-                      </div>
-                    </div>
+                    ))}
                   </div>
                   {transportadora._fallback && (
-                    <div className="text-xs text-gray-500">
-                      Informações operacionais indisponíveis. Exibindo previsão padrão de entrega (+15 dias úteis após aprovação).
-                    </div>
+                    <p className="text-xs text-gray-500">
+                      Informações operacionais indisponíveis. Exibindo previsão padrão (+15 dias úteis).
+                    </p>
                   )}
                 </div>
               )}
 
               {/* Financeiro */}
-              {financeiro && Array.isArray(financeiro.parcelas) && financeiro.parcelas.length > 0 && (
+              {financeiro && Array.isArray(financeiro. parcelas) && financeiro.parcelas.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-800">Financeiro</h4>
-                  <div className="overflow-x-auto border rounded">
-                    <table className="w-full text-sm">
+                  <h4 className="font-semibold text-gray-900">Financeiro</h4>
+                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-2 text-left">Parcela</th>
-                          <th className="px-3 py-2 text-left">Nota Fiscal</th>
-                          <th className="px-3 py-2 text-left">Emissão</th>
-                          <th className="px-3 py-2 text-left">Vencimento</th>
-                          <th className="px-3 py-2 text-right">Valor</th>
-                          <th className="px-3 py-2 text-right">Pago</th>
-                          <th className="px-3 py-2 text-left">Status</th>
+                          {['Parcela', 'Nota Fiscal', 'Emissão', 'Vencimento', 'Valor', 'Pago', 'Status'].map(h => (
+                            <th key={h} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">{h}</th>
+                          ))}
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="bg-white divide-y divide-gray-200">
                         {financeiro.parcelas.map((p: any, idx: number) => (
-                          <tr key={p.parcela ?? p.notaFiscal ?? idx} className="border-t">
-                            <td className="px-3 py-2 text-left">{p.parcela}</td>
-                            <td className="px-3 py-2 text-left">{p.notaFiscal ?? p.NOTA_FISCAL ?? '-'}</td>
-                            <td className="px-3 py-2 text-left">{p.dtEmissao ? new Date(p.dtEmissao).toLocaleDateString('pt-BR') : (p.DTEMISSAO ? new Date(p.DTEMISSAO).toLocaleDateString('pt-BR') : '-')}</td>
-                            <td className="px-3 py-2 text-left">{p.dtVencimento ? new Date(p.dtVencimento).toLocaleDateString('pt-BR') : (p.DTVENC ? new Date(p.DTVENC).toLocaleDateString('pt-BR') : '-')}</td>
-                            <td className="px-3 py-2 text-right">{formatCurrency(p.valor ?? p.VALOR ?? 0)}</td>
-                            <td className="px-3 py-2 text-right">{p.valorPago ? formatCurrency(p.valorPago ?? p.VALORPAGO ?? 0) : '-'}</td>
-                            <td className="px-3 py-2 text-left">{p.status ?? p.STATUS ?? '-'}</td>
+                          <tr key={p.parcela ??  p.notaFiscal ?? idx} className="hover:bg-gray-50">
+                            <td className="px-3 py-2">{p.parcela}</td>
+                            <td className="px-3 py-2">{p.notaFiscal ??  p. NOTA_FISCAL ?? '-'}</td>
+                            <td className="px-3 py-2">{p.dtEmissao ? new Date(p.dtEmissao).toLocaleDateString('pt-BR') : (p. DTEMISSAO ? new Date(p. DTEMISSAO).toLocaleDateString('pt-BR') : '-')}</td>
+                            <td className="px-3 py-2">{p.dtVencimento ? new Date(p.dtVencimento).toLocaleDateString('pt-BR') : (p.DTVENC ? new Date(p.DTVENC).toLocaleDateString('pt-BR') : '-')}</td>
+                            <td className="px-3 py-2 font-medium">{formatCurrency(p.valor ??  p.VALOR ??  0)}</td>
+                            <td className="px-3 py-2">{p.valorPago ? formatCurrency(p.valorPago ??  p.VALORPAGO ?? 0) : '-'}</td>
+                            <td className="px-3 py-2">{p.status ??  p.STATUS ?? '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -567,117 +585,63 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
               )}
 
               {/* Concatenação */}
-              <div className="space-y-3">
-                <h4 className="font-semibold text-gray-800">Concatenação</h4>
-
-                {data.concatRole === 'RESULTADO' && (
-                  <div className="text-sm text-gray-700">
-                    <div className="mb-1">
-                      Pedido gerado por concatenação.
-                      {data.concatGroupId && (
-                        <span className="ml-1 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                          Grupo {data.concatGroupId}
-                        </span>
-                      )}
-                    </div>
-                    {data.concatOrigens.length > 0 ? (
-                      <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                        {data.concatOrigens.map(o => (
-                          <li key={o.id}>
-                            Pedido #{o.id} — {o.statusLabel}{' '}
-                            <button
-                              type="button"
-                              className="text-xs text-blue-600 hover:underline ml-1"
-                              onClick={() => {
-                                fetchPedidoDetalhe(o.id).then(setData).catch(() => { });
-                              }}
-                              title={`Abrir detalhes do pedido #${o.id}`}
-                            >
-                              ver
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-xs text-gray-500">Sem origens listadas.</div>
-                    )}
-                  </div>
-                )}
-
-                {data.concatRole === 'ORIGEM' && (
-                  <div className="text-sm text-gray-700">
-                    Pedido marcado como origem de concatenação.
-                    {data.concatGroupId && (
-                      <span className="ml-1 text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                        Grupo {data.concatGroupId}
-                      </span>
-                    )}
-                    {data.concatResultado ? (
-                      <div className="mt-1">
-                        Resultado: #{data.concatResultado.id} — {data.concatResultado.statusLabel}{' '}
-                        <button
-                          type="button"
-                          className="text-xs text-blue-600 hover:underline"
-                          onClick={() => {
-                            fetchPedidoDetalhe(data.concatResultado!.id).then(setData).catch(() => { });
-                          }}
-                          title={`Abrir detalhes do pedido #${data.concatResultado.id}`}
-                        >
-                          ver
-                        </button>
+              {(data.concatRole || data.aprovador) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Concatenação */}
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-semibold text-gray-900 mb-2">Concatenação</h4>
+                    {data.concatRole === 'RESULTADO' && (
+                      <div className="text-sm text-gray-700 space-y-2">
+                        <p>
+                          Pedido gerado por concatenação
+                          {data.concatGroupId && (
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                              Grupo {data.concatGroupId}
+                            </span>
+                          )}
+                        </p>
+                        {data.concatOrigens. length > 0 && (
+                          <ul className="list-disc pl-5 space-y-1 text-xs">
+                            {data.concatOrigens.map(o => (
+                              <li key={o. id}>
+                                Pedido #{o.id} — {o.statusLabel}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
-                    ) : (
-                      <div className="text-xs text-gray-500">Resultado não localizado.</div>
+                    )}
+                    {data.concatRole === 'ORIGEM' && (
+                      <div className="text-sm text-gray-700">
+                        <p>Pedido origem de concatenação</p>
+                        {data.concatResultado && (
+                          <p className="text-xs mt-1">
+                            Resultado: #{data.concatResultado. id} — {data.concatResultado.statusLabel}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {! data.concatRole && (
+                      <p className="text-sm text-gray-500">Sem concatenação</p>
                     )}
                   </div>
-                )}
 
-                {!data.concatRole && (
-                  <div className="text-sm text-gray-500">Sem concatenação.</div>
-                )}
-              </div>
-
-              {/* Aprovação */}
-              {data.aprovador && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-800">Análise</h4>
-                  <div className="text-sm text-gray-700">
-                    Analisado por: <span className="font-medium">{data.aprovador.nome}</span> ({data.aprovador.email})
-                  </div>
+                  {/* Aprovação */}
+                  {data.aprovador && (
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <h4 className="font-semibold text-gray-900 mb-2">Análise</h4>
+                      <div className="text-sm text-gray-700">
+                        <p>Analisado por: <strong>{data.aprovador. nome}</strong></p>
+                        <p className="text-xs text-gray-500">{data.aprovador.email}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-              {data.status === 2 && data.reprovacaoMotivo && (
-                <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
-                  <strong>Reprovado</strong> por {data.aprovador?.nome ? data.aprovador.nome : '—'} • Motivo: {data.reprovacaoMotivo}
-                </div>
-              )}
-
-              {data.concatRole && (
-                <div className="text-sm text-gray-700">
-                  {data.concatRole === 'RESULTADO'
-                    ? 'Pedido gerado por concatenação.'
-                    : data.concatRole === 'ORIGEM'
-                      ? 'Pedido marcado como origem de concatenação.'
-                      : null}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2 text-xs">
-                {data.statusOperacional && (
-                  <span className="px-2 py-1 rounded bg-gray-100 text-gray-800 border">
-                    Operacional: {data.statusOperacional}
-                  </span>
-                )}
-                {data.entregue && (
-                  <span className="px-2 py-1 rounded bg-green-100 text-green-800 border border-green-200">
-                    Entregue (operacional)
-                  </span>
-                )}
-              </div>
 
               {/* Eventos */}
               <div className="space-y-3">
-                <h4 className="font-semibold text-gray-800">Eventos</h4>
+                <h4 className="font-semibold text-gray-900">Linha do Tempo</h4>
                 <PedidoTimeline eventos={data.eventos} />
               </div>
             </>
@@ -685,22 +649,26 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200">
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end flex-shrink-0">
+          <button 
+            onClick={onClose} 
+            className="px-6 py-2. 5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 font-medium transition-colors"
+          >
             Fechar
           </button>
         </div>
       </div>
 
+      {/* Modals */}
       <ContestModal
         open={contestOpen}
         onClose={() => setContestOpen(false)}
-        pedidoId={data?.id || (pedidoId as number)}
+        pedidoId={data?. id || (pedidoId as number)}
         motivoReprovacao={(data as any)?.reprovacaoMotivo}
         onCreated={() => {
           setContestOpen(false);
           if (pedidoId != null) {
-            fetchPedidoDetalhe(pedidoId).then(setData).catch(() => { });
+            fetchPedidoDetalhe(pedidoId). then(setData). catch(() => { });
           }
         }}
       />
@@ -712,7 +680,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
         onCreated={() => {
           setAtesteOpen(false);
           if (pedidoId != null) {
-            fetchPedidoDetalhe(pedidoId).then(setData).catch(() => { });
+            fetchPedidoDetalhe(pedidoId).then(setData). catch(() => { });
           }
         }}
       />
@@ -724,7 +692,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
         onCreated={() => {
           setSatisfacaoOpen(false);
           if (pedidoId != null) {
-            fetchPedidoDetalhe(pedidoId).then(setData).catch(() => { });
+            fetchPedidoDetalhe(pedidoId).then(setData). catch(() => { });
           }
         }}
       />
