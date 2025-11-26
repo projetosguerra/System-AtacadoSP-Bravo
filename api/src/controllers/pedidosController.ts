@@ -5,17 +5,6 @@ function cap(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-const PENDENTES_INFLIGHT_THRESHOLD =
-  Number(process.env.PENDENTES_INFLIGHT_THRESHOLD ??
-    process.env.PENDENTES_QUEUE_THRESHOLD ?? 5);
-
-const HIST_INFLIGHT_THRESHOLD =
-  Number(process.env.HIST_INFLIGHT_THRESHOLD ??
-    process.env.HIST_QUEUE_THRESHOLD ?? 5);
-
-let inflightPendentes = 0;
-let inflightHistorico = 0;
-
 function mapConcatRole(papel?: string | null): 'RESULTADO' | 'ORIGEM' | null {
   const v = String(papel ?? '').trim().toUpperCase();
   if (v === 'RESULTADO') return 'RESULTADO';
@@ -24,25 +13,14 @@ function mapConcatRole(papel?: string | null): 'RESULTADO' | 'ORIGEM' | null {
 }
 
 function readUserScope(u: any): { perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE'; codSetor?: number; codUsuario?: number } {
-  const rawPerfil =
-    u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
-  const perfilUp = String(rawPerfil).trim().toUpperCase();
-
   const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? NaN);
-  let perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
-  if (['ADMIN', 'APROVADOR', 'SOLICITANTE'].includes(perfilUp)) {
-    perfil = perfilUp as any;
-  } else if (Number.isFinite(tipoNum)) {
-    perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
-  } else {
-    perfil = 'APROVADOR';
-  }
+  let perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE' =
+    (['ADMIN','APROVADOR','SOLICITANTE'].includes(String(u?.perfil).toUpperCase() || ''))
+      ? (String(u?.perfil).toUpperCase() as any)
+      : (Number.isFinite(tipoNum) ? (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE') : 'APROVADOR');
 
-  const codSetor = Number(
-    u?.codSetor ?? u?.codsetor ?? u?.CODSETOR ?? u?.setorId ?? u?.COD_SETOR
-  );
-  const codUsuario = Number(u?.codUsuario ?? u?.CODUSUARIO ?? u?.userId);
-
+  const codSetor = Number(u?.codSetor ?? u?.CODSETOR);
+  const codUsuario = Number(u?.codUsuario ?? u?.CODUSUARIO);
   return {
     perfil,
     ...(Number.isFinite(codSetor) ? { codSetor } : {}),
@@ -51,12 +29,6 @@ function readUserScope(u: any): { perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
 }
 
 export const listarPendentes = async (req: any, res: any) => {
-  if (inflightPendentes >= PENDENTES_INFLIGHT_THRESHOLD) {
-    res.set('Retry-After', '2');
-    return res.status(503).json({ error: 'Busy, try again shortly.' });
-  }
-
-  inflightPendentes++;
   try {
     const days = cap(Number(req.query?.days ?? process.env.PENDENTES_DAYS ?? 30), 7, 45);
     const maxrows = cap(Number(req.query?.maxrows ?? process.env.PENDENTES_MAXROWS ?? 200), 10, 200);
@@ -71,12 +43,17 @@ export const listarPendentes = async (req: any, res: any) => {
           SELECT
             p.NUMPEDRCA                                       AS ID,
             p.DATA                                            AS DATA,
+            p.STATUS                                          AS STATUS,
             (u.PRIMEIRO_NOME || ' ' || NVL(u.ULTIMO_NOME,'')) AS SOLICITANTE,
             s.DESCRICAO                                       AS SETOR,
             NVL(p.QTD_ITENS, 0)                               AS QTD_ITENS,
             NVL(p.VALOR_TOTAL, 0)                             AS VALOR_TOTAL,
             NVL(p.CONCAT_PAPEL,'NENHUM')                      AS CONCAT_PAPEL,
-            p.CONCAT_GRUPO_ID                                 AS CONCAT_GRUPO_ID
+            p.CONCAT_GRUPO_ID                                 AS CONCAT_GRUPO_ID,
+            p.DATA_APROVACAO                                  AS DATA_APROVACAO,
+            (SELECT a.PRIMEIRO_NOME || ' ' || NVL(a.ULTIMO_NOME,'')
+               FROM BRAMV_USUARIOS a
+              WHERE a.CODUSUARIO = p.APROVADOR_ID)            AS APROVADOR_NOME
           FROM BRAMV_PEDIDOC p
           LEFT JOIN BRAMV_USUARIOS u ON u.CODUSUARIO = p.CODUSUARIO
           LEFT JOIN BRAMV_SETOR s    ON s.CODSETOR    = u.CODSETOR
@@ -87,19 +64,22 @@ export const listarPendentes = async (req: any, res: any) => {
         )
         WHERE ROWNUM <= :maxrows
       `;
-      const binds: Record<string, any> = { days, maxrows };
-      if (restrictSetor) binds.userSetor = codSetor;
-
+      const binds: Record<string, any> = { days, maxrows, ...(restrictSetor ? { userSetor: codSetor } : {}) };
       const r = await connection.execute(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+
       return (r.rows || []).map((p: any) => ({
         id: p.ID,
         data: p.DATA,
+        status: Number(p.STATUS),
         solicitante: p.SOLICITANTE,
         unidadeAdmin: p.SETOR || 'N/A',
         qtdItens: Number(p.QTD_ITENS || 0),
         valor: Number(p.VALOR_TOTAL || 0),
         concatRole: mapConcatRole(p.CONCAT_PAPEL),
-        concatGroupId: p.CONCAT_GRUPO_ID ?? null
+        concatGroupId: p.CONCAT_GRUPO_ID ?? null,
+        aprovador: p.APROVADOR_NOME || null,
+        dataAprovacao: p.DATA_APROVACAO || null,
+        centroCusto: null // não há coluna no schema atual
       }));
     });
 
@@ -107,18 +87,10 @@ export const listarPendentes = async (req: any, res: any) => {
   } catch (err) {
     console.error('ERRO AO BUSCAR PEDIDOS PENDENTES:', err);
     return res.status(500).json({ error: 'Erro ao buscar pedidos pendentes.' });
-  } finally {
-    inflightPendentes = Math.max(0, inflightPendentes - 1);
   }
 };
 
 export const listarHistorico = async (req: any, res: any) => {
-  if (inflightHistorico >= HIST_INFLIGHT_THRESHOLD) {
-    res.set('Retry-After', '2');
-    return res.status(503).json({ error: 'Busy, try again shortly.' });
-  }
-
-  inflightHistorico++;
   try {
     const days = cap(Number(req.query?.days ?? process.env.HIST_DAYS ?? 30), 7, 45);
     const maxrows = cap(Number(req.query?.maxrows ?? process.env.HIST_MAXROWS ?? 300), 50, 400);
@@ -151,7 +123,11 @@ export const listarHistorico = async (req: any, res: any) => {
           NVL(p.QTD_ITENS, 0)                               AS QTD_ITENS,
           NVL(p.VALOR_TOTAL, 0)                             AS VALOR_TOTAL,
           p.CONCAT_PAPEL                                    AS CONCAT_PAPEL,
-          p.CONCAT_GRUPO_ID                                 AS CONCAT_GRUPO_ID
+          p.CONCAT_GRUPO_ID                                 AS CONCAT_GRUPO_ID,
+          p.DATA_APROVACAO                                  AS DATA_APROVACAO,
+          (SELECT a.PRIMEIRO_NOME || ' ' || NVL(a.ULTIMO_NOME,'')
+             FROM BRAMV_USUARIOS a
+            WHERE a.CODUSUARIO = p.APROVADOR_ID)            AS APROVADOR_NOME
         FROM BRAMV_PEDIDOC p
         LEFT JOIN BRAMV_USUARIOS u ON u.CODUSUARIO = p.CODUSUARIO
         LEFT JOIN BRAMV_SETOR s    ON s.CODSETOR    = u.CODSETOR
@@ -177,20 +153,21 @@ export const listarHistorico = async (req: any, res: any) => {
     const pedidos = (r.rows || []).map((p: any) => ({
       id: p.ID,
       data: p.DATA,
-      status: p.STATUS,
+      status: Number(p.STATUS),
       solicitante: p.SOLICITANTE,
       setor: p.SETOR || 'N/A',
       qtdItens: Number(p.QTD_ITENS || 0),
       valorTotal: Number(p.VALOR_TOTAL || 0),
       concatRole: mapConcatRole(p.CONCAT_PAPEL),
       concatGroupId: p.CONCAT_GRUPO_ID ?? null,
+      aprovador: p.APROVADOR_NOME || null,
+      dataAprovacao: p.DATA_APROVACAO || null,
+      centroCusto: null
     }));
 
     return res.json(pedidos);
   } catch (err) {
     console.error('ERRO AO BUSCAR HISTÓRICO DE PEDIDOS:', err);
     return res.status(500).json({ error: 'Erro ao buscar histórico de pedidos.' });
-  } finally {
-    inflightHistorico = Math.max(0, inflightHistorico - 1);
   }
 };

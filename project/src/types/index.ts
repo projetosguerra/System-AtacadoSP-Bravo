@@ -66,6 +66,10 @@ export interface PedidoPendente {
   valor: number;
   concatRole?: 'RESULTADO' | 'ORIGEM' | null;
   concatGroupId?: number | null;
+
+  aprovador?: string | null;
+  dataAprovacao?: string | null;
+  centroCusto?: string | null;
 }
 
 
@@ -95,4 +99,8 @@ export interface HistoricalOrder {
   valorTotal: number;
   concatRole?: 'RESULTADO' | 'ORIGEM' | null;
   concatGroupId?: number | null;
+
+  aprovador?: string | null;
+  dataAprovacao?: string | null;
+  centroCusto?: string | null;
 }

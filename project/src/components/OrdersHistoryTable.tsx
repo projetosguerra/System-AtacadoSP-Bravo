@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown, Info } from 'lucide-react';
+import { Search, Filter, ChevronLeft, ChevronRight, ArrowUpDown, Info, ChevronDown } from 'lucide-react';
 import { HistoricalOrder } from '../types';
 
 interface OrdersHistoryTableProps {
@@ -60,6 +60,17 @@ function statusBadge(status: number) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colorClasses[info.color]}`}>{info.text}</span>;
 }
 
+function addBusinessDays(from: Date, days: number) {
+  const d = new Date(from);
+  let add = 0;
+  while (add < days) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) add++;
+  }
+  return d;
+}
+
 const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   orders,
   searchTerm = '',
@@ -77,9 +88,22 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
   const [localStatus, setLocalStatus] = useState(filterStatus);
   const [localUnit, setLocalUnit] = useState(filterUnit);
 
+  // Filtros avançados
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [fId, setFId] = useState('');
+  const [fSolicitante, setFSolicitante] = useState('');
+  const [fAprovador, setFAprovador] = useState('');
+  const [fSetor, setFSetor] = useState('');
+  const [fDataIni, setFDataIni] = useState('');
+  const [fDataFim, setFDataFim] = useState('');
+  const [fPrevIni, setFPrevIni] = useState('');
+  const [fPrevFim, setFPrevFim] = useState('');
+  const [fValorMin, setFValorMin] = useState('');
+  const [fValorMax, setFValorMax] = useState('');
+
   useEffect(() => {
     onPageChange(1);
-  }, [localSearch, localStatus, localUnit, sortKey, sortDir, orders.length]); // eslint-disable-line
+  }, [localSearch, localStatus, localUnit, sortKey, sortDir, orders.length, fId, fSolicitante, fAprovador, fSetor, fDataIni, fDataFim, fPrevIni, fPrevFim, fValorMin, fValorMax]); // eslint-disable-line
 
   const uniqueOrders = useMemo(() => {
     const map = new Map<number | string, HistoricalOrder>();
@@ -89,39 +113,70 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
 
   const unitOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const o of uniqueOrders) {
-      if (o.setor && o.setor.trim()) set.add(o.setor.trim());
-    }
+    for (const o of uniqueOrders) if (o.setor && o.setor.trim()) set.add(o.setor.trim());
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
   }, [uniqueOrders]);
 
   const effectiveUnit = showUnitFilter ? localUnit : 'todas';
 
   const filteredOrders = useMemo(() => {
+    const term = localSearch.trim().toLowerCase();
     const byStatus = (o: HistoricalOrder) => {
       if (localStatus === 'todos') return true;
-      const wanted = Number(localStatus);
-      return o.status === wanted;
+      return o.status === Number(localStatus);
     };
-    const byUnit = (o: HistoricalOrder) => {
+    const byUnitSelect = (o: HistoricalOrder) => {
       if (effectiveUnit === 'todas') return true;
       return (o.setor || '').trim() === effectiveUnit;
     };
-    const term = localSearch.trim().toLowerCase();
-    const bySearch = (o: HistoricalOrder) => {
-      if (!term) return true;
-      return [
-        String(o.id),
-        o.solicitante ?? '',
-        o.setor ?? '',
-        o.data ?? '',
-        String(o.qtdItens ?? ''),
-        String(o.valorTotal ?? ''),
-        o.concatRole ?? ''
-      ].some(v => String(v).toLowerCase().includes(term));
-    };
-    return uniqueOrders.filter(o => byStatus(o) && byUnit(o) && bySearch(o));
-  }, [uniqueOrders, localStatus, effectiveUnit, localSearch]);
+
+    function toDate(s?: string | null) {
+      if (!s) return null;
+      const d = new Date(s); return isNaN(d.getTime()) ? null : d;
+    }
+    function previsao(o: HistoricalOrder) {
+      const dA = toDate(o.dataAprovacao || null);
+      if (!dA) return null;
+      return addBusinessDays(dA, 15);
+    }
+
+    return uniqueOrders.filter(o => {
+      if (!byStatus(o) || !byUnitSelect(o)) return false;
+
+      if (fId && !String(o.id).includes(fId.trim())) return false;
+      if (fSolicitante && !(o.solicitante || '').toLowerCase().includes(fSolicitante.toLowerCase())) return false;
+      if (fAprovador && !(o.aprovador || '').toLowerCase().includes(fAprovador.toLowerCase())) return false;
+      if (fSetor && !(o.setor || '').toLowerCase().includes(fSetor.toLowerCase())) return false;
+
+      const d = toDate(o.data);
+      if (fDataIni) { const ini = new Date(fDataIni); if (d && d < ini) return false; }
+      if (fDataFim) { const fim = new Date(fDataFim); if (d && d > new Date(fim.getTime() + 86399999)) return false; }
+
+      if (fPrevIni || fPrevFim) {
+        const prev = previsao(o);
+        if (!prev) return false;
+        if (fPrevIni) { const ini = new Date(fPrevIni); if (prev < ini) return false; }
+        if (fPrevFim) { const fim = new Date(fPrevFim); if (prev > new Date(fim.getTime() + 86399999)) return false; }
+      }
+
+      const v = Number(o.valorTotal || 0);
+      const vmin = fValorMin ? Number(fValorMin) : NaN;
+      const vmax = fValorMax ? Number(fValorMax) : NaN;
+      if (Number.isFinite(vmin) && v < vmin) return false;
+      if (Number.isFinite(vmax) && v > vmax) return false;
+
+      if (term) {
+        const hit = [
+          String(o.id), o.solicitante ?? '', o.setor ?? '', o.aprovador ?? '',
+          o.data ?? '', o.dataAprovacao ?? '', String(o.qtdItens ?? ''),
+          String(o.valorTotal ?? ''), o.concatRole ?? ''
+        ].some(v => String(v).toLowerCase().includes(term));
+        if (!hit) return false;
+      }
+
+      return true;
+    });
+  }, [uniqueOrders, localSearch, localStatus, effectiveUnit, fId, fSolicitante, fAprovador, fSetor, fDataIni, fDataFim, fPrevIni, fPrevFim, fValorMin, fValorMax]);
 
   const sortedOrders = useMemo(() => {
     const arr = [...filteredOrders];
@@ -136,60 +191,42 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
     return arr;
   }, [filteredOrders, sortKey, sortDir]);
 
+  // paginação (inalterada)
   const totalOrdersLocal = sortedOrders.length;
   const totalPagesLocal = Math.max(1, Math.ceil(totalOrdersLocal / itemsPerPage));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPagesLocal);
-
-  useEffect(() => {
-    if (currentPage !== safeCurrentPage) onPageChange(safeCurrentPage);
-  }, [currentPage, safeCurrentPage, onPageChange]);
+  useEffect(() => { if (currentPage !== safeCurrentPage) onPageChange(safeCurrentPage); }, [currentPage, safeCurrentPage, onPageChange]);
 
   const startIndex = (safeCurrentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const pageOrders = sortedOrders.slice(startIndex, endIndex);
-
   const startItem = totalOrdersLocal === 0 ? 0 : startIndex + 1;
   const endItem = Math.min(endIndex, totalOrdersLocal);
 
-  const maxButtons = 7;
-  const half = Math.floor(maxButtons / 2);
-  let startBtn = Math.max(1, safeCurrentPage - half);
-  let endBtn = Math.min(totalPagesLocal, startBtn + maxButtons - 1);
-  if (endBtn - startBtn + 1 < maxButtons) startBtn = Math.max(1, endBtn - maxButtons + 1);
-  const pages = Array.from({ length: endBtn - startBtn + 1 }, (_, i) => startBtn + i);
-
+  // UI
   const renderConcatChip = (o: HistoricalOrder) => {
     const tooltipBase = o.concatRole === 'RESULTADO'
       ? `Resultado de concatenação`
       : o.concatRole === 'ORIGEM'
         ? `Origem de concatenação`
         : '';
-    const tt = [
-      tooltipBase,
-      o.concatGroupId ? `Grupo ${o.concatGroupId}` : ''
-    ].filter(Boolean).join(' • ');
-    if (o.concatRole === 'RESULTADO') {
-      return (
-        <span
-          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-          title={tt}
-        >
-          Concatenado
-        </span>
-      );
-    }
-    if (o.concatRole === 'ORIGEM') {
-      return (
-        <span
-          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700"
-          title={tt}
-        >
-          Origem
-        </span>
-      );
-    }
+    const tt = [tooltipBase, o.concatGroupId ? `Grupo ${o.concatGroupId}` : ''].filter(Boolean).join(' • ');
+    if (o.concatRole === 'RESULTADO') return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title={tt}>Concatenado</span>;
+    if (o.concatRole === 'ORIGEM') return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700" title={tt}>Origem</span>;
     return null;
   };
+
+  const maxPageButtons = 5;
+  let startBtn = Math.max(1, safeCurrentPage - Math.floor(maxPageButtons / 2));
+  let endBtn = startBtn + maxPageButtons - 1;
+  if (endBtn > totalPagesLocal) {
+    endBtn = totalPagesLocal;
+    startBtn = Math.max(1, endBtn - maxPageButtons + 1);
+  }
+  const pages = [];
+  for (let i = startBtn; i <= endBtn; i++) {
+    pages.push(i);
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -213,54 +250,21 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
-              value={localStatus}
-              onChange={(e) => setLocalStatus(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="todos">Todos</option>
-              <option value="1">Aprovados</option>
-              <option value="2">Reprovados</option>
-              <option value="3">Em Análise</option>
-              <option value="5">Pendentes</option>
-              <option value="9">Arquivados (Concat)</option>
-            </select>
-          </div>
-
-          {showUnitFilter && (
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <select
-                value={localUnit}
-                onChange={(e) => setLocalUnit(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                title="Filtrar por Unidade Administrativa"
-              >
-                <option value="todas">Todas as Unidades</option>
-                {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-          )}
+          <button type="button" className="inline-flex items-center gap-1 px-3 py-2 border rounded-lg text-sm hover:bg-gray-50" onClick={() => setShowAdvanced(s => !s)} aria-expanded={showAdvanced ? 'true' : 'false'}>
+            <Filter className="w-4 h-4 text-gray-500" />
+            Filtros Avançados
+            <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+          </button>
 
           <div className="flex items-center gap-2">
             <ArrowUpDown className="w-4 h-4 text-gray-400" />
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
               <option value="data">Ordenar por Data</option>
               <option value="id">Ordenar por ID</option>
               <option value="setor">Ordenar por Unidade</option>
               <option value="valor">Ordenar por Valor</option>
             </select>
-            <select
-              value={sortDir}
-              onChange={(e) => setSortDir(e.target.value as SortDir)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select value={sortDir} onChange={(e) => setSortDir(e.target.value as SortDir)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
               <option value="desc">Descendente</option>
               <option value="asc">Ascendente</option>
             </select>
@@ -268,11 +272,48 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
         </div>
       </div>
 
+      {showAdvanced && (
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <input className="border rounded px-3 py-2 text-sm" placeholder="Nº Identificador" value={fId} onChange={e => setFId(e.target.value)} />
+            <input className="border rounded px-3 py-2 text-sm" placeholder="Unidade (nome/sigla)" value={fSetor} onChange={e => setFSetor(e.target.value)} />
+            <input className="border rounded px-3 py-2 text-sm" placeholder="Solicitante" value={fSolicitante} onChange={e => setFSolicitante(e.target.value)} />
+            <input className="border rounded px-3 py-2 text-sm" placeholder="Aprovador" value={fAprovador} onChange={e => setFAprovador(e.target.value)} />
+            <div className="flex gap-2">
+              <input type="date" className="border rounded px-3 py-2 text-sm w-full" value={fDataIni} onChange={e => setFDataIni(e.target.value)} title="Data do pedido (de)" />
+              <input type="date" className="border rounded px-3 py-2 text-sm w-full" value={fDataFim} onChange={e => setFDataFim(e.target.value)} title="Data do pedido (até)" />
+            </div>
+            <div className="flex gap-2">
+              <input type="date" className="border rounded px-3 py-2 text-sm w-full" value={fPrevIni} onChange={e => setFPrevIni(e.target.value)} title="Previsão (de)" />
+              <input type="date" className="border rounded px-3 py-2 text-sm w-full" value={fPrevFim} onChange={e => setFPrevFim(e.target.value)} title="Previsão (até)" />
+            </div>
+            <div className="flex gap-2">
+              <input type="number" min={0} className="border rounded px-3 py-2 text-sm w-full" placeholder="Valor mín." value={fValorMin} onChange={e => setFValorMin(e.target.value)} />
+              <input type="number" min={0} className="border rounded px-3 py-2 text-sm w-full" placeholder="Valor máx." value={fValorMax} onChange={e => setFValorMax(e.target.value)} />
+            </div>
+            <select value={localStatus} onChange={(e) => setLocalStatus(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full" title="Status">
+              <option value="todos">Todos os status</option>
+              <option value="1">Aprovados</option>
+              <option value="2">Reprovados</option>
+              <option value="3">Em Análise</option>
+              <option value="5">Pendentes</option>
+              <option value="9">Arquivados (Concat)</option>
+            </select>
+            {showUnitFilter && (
+              <select value={localUnit} onChange={(e) => setLocalUnit(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full" title="Unidade Administrativa">
+                <option value="todas">Todas as Unidades</option>
+                {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">N/S</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{/* sem título (Excel-like) */}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horário</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
@@ -286,44 +327,21 @@ const OrdersHistoryTable: React.FC<OrdersHistoryTableProps> = ({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {pageOrders.map((order, index) => (
-              <tr
-                key={order.id}
-                className="hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => onRowClick?.(order)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter') onRowClick?.(order); }}
-              >
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {String(startItem + index).padStart(2, '0')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatDate(order.data)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatTime(order.data)}
-                </td>
+              <tr key={order.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => onRowClick?.(order)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onRowClick?.(order); }}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{String(startItem + index).padStart(2, '0')}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(order.data)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatTime(order.data)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.id}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.solicitante}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.setor || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{order.qtdItens ?? 0}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                  {formatCurrency(Number(order.valorTotal || 0))}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {statusBadge(order.status)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {renderConcatChip(order)}
-                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatCurrency(Number(order.valorTotal || 0))}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{statusBadge(order.status)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{renderConcatChip(order)}</td>
               </tr>
             ))}
             {pageOrders.length === 0 && (
-              <tr>
-                <td className="px-6 py-8 text-center text-gray-500" colSpan={10}>
-                  Nenhum pedido encontrado.
-                </td>
-              </tr>
+              <tr><td className="px-6 py-8 text-center text-gray-500" colSpan={10}>Nenhum pedido encontrado.</td></tr>
             )}
           </tbody>
         </table>
