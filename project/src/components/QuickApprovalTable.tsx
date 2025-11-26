@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import type { PedidoPendente } from '../types';
 
@@ -10,38 +11,67 @@ function formatDate(d: any) {
     ? '-'
     : x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
+function formatTime(d: any) {
+  const x = new Date(d);
+  return isNaN(x.getTime())
+    ? '-'
+    : x.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
 
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
+function extractSigla(text?: string | null) {
+  if (!text) return 'N/A';
+  const t = String(text).trim();
+  const dash = t.indexOf(' - ');
+  if (dash > 0) return t.substring(0, dash).trim();
+  const m = t.match(/^[A-Z]{2,}\b/);
+  return m ? m[0] : t;
+}
+
 export default function QuickApprovalTable() {
   const { pedidosPendentes: ctxPendentes } = useData();
+  const { user, token } = useAuth();
 
   const [list, setList] = useState<PedidoPendente[]>(ctxPendentes || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // usa contexto no primeiro render e mantém estado local para refresh leve
+  function filterByUserUnit(arr: PedidoPendente[]) {
+    if (!user) return arr;
+    if (user.perfil === 'Admin') return arr;
+    const userSigla = extractSigla(user.setor);
+    return (arr || []).filter(p => extractSigla((p as any).unidadeAdmin) === userSigla);
+  }
+
   useEffect(() => {
-    setList(ctxPendentes || []);
-  }, [ctxPendentes]);
+    const base = Array.isArray(ctxPendentes) ? ctxPendentes : [];
+    setList(filterByUserUnit(base));
+  }, [ctxPendentes]); 
 
   async function refresh() {
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch('/api/pedidos/pendentes?days=45&maxrows=200', { headers: { 'Cache-Control': 'no-cache' } });
+      const resp = await fetch('/api/pedidos/pendentes?days=45&maxrows=200', {
+        headers: {
+          'Cache-Control': 'no-cache',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       if (!resp.ok) throw new Error('Falha ao buscar pedidos pendentes');
       const data = await resp.json();
       const map = new Map<string | number, PedidoPendente>();
       for (const p of Array.isArray(data) ? data : []) {
         if (!map.has(p.id)) map.set(p.id, p);
       }
-      const arr = Array.from(map.values()).sort((a, b) => {
-        const da = new Date(a.data as any).getTime() || 0;
-        const db = new Date(b.data as any).getTime() || 0;
-        return db - da;
-      });
-      setList(arr);
+      const arr = Array.from(map.values())
+        .sort((a, b) => {
+          const da = new Date(a.data as any).getTime() || 0;
+          const db = new Date(b.data as any).getTime() || 0;
+          return db - da;
+        });
+      setList(filterByUserUnit(arr));
     } catch (e: any) {
       setError(e?.message || 'Erro ao atualizar.');
     } finally {
@@ -79,9 +109,10 @@ export default function QuickApprovalTable() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Data</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Horário</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">ID</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Solicitante</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Uni. Adm.</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Sigla</th>
                 <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Valor</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Ação</th>
               </tr>
@@ -90,9 +121,10 @@ export default function QuickApprovalTable() {
               {top5.map((p) => (
                 <tr key={`qa-${p.id}`} className="hover:bg-gray-50">
                   <td className="px-4 py-2 text-sm">{formatDate(p.data as any)}</td>
+                  <td className="px-4 py-2 text-sm">{formatTime(p.data as any)}</td>
                   <td className="px-4 py-2 text-sm text-gray-600">{p.id}</td>
                   <td className="px-4 py-2 text-sm">{p.solicitante}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{(p as any).unidadeAdmin || 'N/A'}</td>
+                  <td className="px-4 py-2 text-sm text-gray-600">{extractSigla((p as any).unidadeAdmin)}</td>
                   <td className="px-4 py-2 text-sm text-right font-medium">{brl.format(Number((p as any).valor || 0))}</td>
                   <td className="px-4 py-2 text-sm">
                     <Link

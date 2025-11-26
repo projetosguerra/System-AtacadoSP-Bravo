@@ -19,6 +19,11 @@ function formatDate(d: any) {
   if (isNaN(x.getTime())) return '-';
   return x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
+function formatTime(d: any) {
+  const x = new Date(d);
+  if (isNaN(x.getTime())) return '-';
+  return x.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 function StatusBadge({ s }: { s?: number }) {
@@ -30,9 +35,19 @@ function StatusBadge({ s }: { s?: number }) {
   return <span className={`${base} bg-gray-100 text-gray-700`}>N/A</span>;
 }
 
+// Extrai sigla da unidade: "SEADH - Secretaria ..." => "SEADH"
+function extractSigla(text?: string | null) {
+  if (!text) return 'N/A';
+  const t = String(text).trim();
+  const dash = t.indexOf(' - ');
+  if (dash > 0) return t.substring(0, dash).trim();
+  const m = t.match(/^[A-Z]{2,}\b/);
+  return m ? m[0] : t;
+}
+
 export default function SectorOrdersTable() {
-  const { user } = useAuth();
-  const { orders, setores, isLoading } = useData();
+  const { user, token } = useAuth();
+  const { orders, isLoading } = useData();
 
   const [loading, setLoading] = useState(false);
   const [ordersLocal, setOrdersLocal] = useState<any[]>(orders || []);
@@ -40,18 +55,14 @@ export default function SectorOrdersTable() {
 
   useEffect(() => setOrdersLocal(orders || []), [orders]);
 
-  const sectorDesc = useMemo(() => {
-    if (!user?.codSetor) return null;
-    const s = setores?.find(x => Number(x.CODSETOR) === Number(user.codSetor));
-    return s?.DESCRICAO || null;
-  }, [user, setores]);
+  const userSectorSigla = useMemo(() => extractSigla(user?.setor || ''), [user?.setor]);
 
   const rows = useMemo(() => {
     const base = Array.isArray(ordersLocal) ? ordersLocal : [];
     let filtered: Row[] = base as any;
 
-    if (sectorDesc) {
-      filtered = filtered.filter(o => (o.setor || '').toLowerCase() === sectorDesc.toLowerCase());
+    if (userSectorSigla && user?.perfil !== 'Admin') {
+      filtered = filtered.filter(o => extractSigla(o.setor) === userSectorSigla);
     }
 
     filtered = filtered.slice().sort((a, b) => {
@@ -61,14 +72,19 @@ export default function SectorOrdersTable() {
     });
 
     return filtered.slice(0, 5);
-  }, [ordersLocal, sectorDesc]);
+  }, [ordersLocal, userSectorSigla, user?.perfil]);
 
   async function refresh() {
     if (!user?.codSetor) return;
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch('/api/pedidos/historico?days=45&maxrows=400', { headers: { 'Cache-Control': 'no-cache' } });
+      const resp = await fetch('/api/pedidos/historico?days=45&maxrows=400', {
+        headers: {
+          'Cache-Control': 'no-cache',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       if (!resp.ok) throw new Error('Falha ao buscar histórico');
       const data = await resp.json();
       setOrdersLocal(Array.isArray(data) ? data : []);
@@ -122,6 +138,7 @@ export default function SectorOrdersTable() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Data</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Horário</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">ID</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Solicitante</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Qtd</th>
@@ -133,6 +150,7 @@ export default function SectorOrdersTable() {
               {rows.map((o) => (
                 <tr key={`my-sector-${o.id}`} className="hover:bg-gray-50">
                   <td className="px-4 py-2 text-sm text-gray-900">{formatDate(o.data)}</td>
+                  <td className="px-4 py-2 text-sm text-gray-900">{formatTime(o.data)}</td>
                   <td className="px-4 py-2 text-sm text-gray-600">{o.id}</td>
                   <td className="px-4 py-2 text-sm text-gray-900">{o.solicitante}</td>
                   <td className="px-4 py-2 text-sm text-gray-600">{o.qtdItens ?? 0}</td>
