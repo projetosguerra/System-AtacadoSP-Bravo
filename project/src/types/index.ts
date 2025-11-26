@@ -48,6 +48,7 @@ export interface Product {
   preco: number;
   imgUrl: string;
   unit: string;
+  brand?: string;
 }
 
 export interface CartItem extends Product {

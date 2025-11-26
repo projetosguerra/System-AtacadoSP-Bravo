@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { Tag } from 'lucide-react';
 
 type ProdutoDetalhe = {
     id: number;
@@ -10,6 +11,7 @@ type ProdutoDetalhe = {
     imgUrl: string;
     preco: number;
     embalagem?: string;
+    marca?: string | null;
 };
 
 type Mini = { id: number; nome: string; imgUrl: string; preco: number; unit?: string };
@@ -25,6 +27,12 @@ export default function ProductDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [loadingNext, setLoadingNext] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    function safeName(n?: string | null) {
+      const x = String(n ?? '').trim();
+      if (!!x && x !== '.') return x;
+      return produto?.marca ? `Produto ${produto.marca}` : (produto ? `Produto ${produto.id}` : 'Produto');
+    }
 
     useEffect(() => {
         if (!id) return;
@@ -73,13 +81,13 @@ export default function ProductDetailsPage() {
                     <div className="bg-white rounded-xl border p-4 h-80 md:h-[420px] flex items-center justify-center">
                         <img
                             src={produto.imgUrl}
-                            alt={produto.nome}
+                            alt={safeName(produto.nome)}
                             className="max-h-full max-w-full object-contain"
                             loading="lazy"
                             onError={(e) => {
                                 const el = e.currentTarget as HTMLImageElement;
                                 el.onerror = null;
-                                el.src = `https://placehold.co/600x400/eeeeee/333333?text=${encodeURIComponent(produto.nome?.slice(0, 32) || 'Produto')}`;
+                                el.src = `https://placehold.co/600x400/eeeeee/333333?text=${encodeURIComponent(safeName(produto.nome).slice(0, 32))}`;
                             }}
                         />
                     </div>
@@ -130,11 +138,17 @@ export default function ProductDetailsPage() {
 
                 {/* Coluna informações */}
                 <div className="col-span-12 lg:col-span-6 min-w-0">
-                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{produto.nome}</h1>
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{safeName(produto.nome)}</h1>
 
-                    <div className="mt-2 text-sm text-gray-500">
-                        Cod.: <span className="font-mono">{produto.id}</span>
-                        {produto.codigoAuxiliar && <> • EAN: <span className="font-mono">{produto.codigoAuxiliar}</span></>}
+                    <div className="mt-2 text-sm text-gray-600 flex flex-wrap items-center gap-3">
+                        <div>Cod.: <span className="font-mono">{produto.id}</span></div>
+                        {produto.codigoAuxiliar && <div>EAN: <span className="font-mono">{produto.codigoAuxiliar}</span></div>}
+                        {produto.marca && (
+                          <div className="inline-flex items-center gap-1">
+                            <Tag className="w-4 h-4 text-gray-500" /> {produto.marca}
+                          </div>
+                        )}
+                        {produto.embalagem && <div>Unid.: {produto.embalagem}</div>}
                     </div>
 
                     <div className="mt-4 flex items-baseline gap-3">
@@ -161,11 +175,12 @@ export default function ProductDetailsPage() {
                                 addToCart(
                                     {
                                         id: produto.id,
-                                        nome: produto.nome,
+                                        nome: safeName(produto.nome),
                                         preco: produto.preco,
                                         descricao: produto.descricaoTecnica,
                                         imgUrl: produto.imgUrl,
-                                        unit: produto.embalagem || ''
+                                        unit: produto.embalagem || '',
+                                        brand: produto.marca || undefined
                                     },
                                     qty
                                 )

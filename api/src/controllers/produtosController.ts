@@ -8,6 +8,12 @@ const inflight = new Map<string, Promise<any[]>>();
 
 const INFLIGHT_THRESHOLD = Number(process.env.PRODUTOS_INFLIGHT_THRESHOLD ?? 12);
 
+function safeName(nome: any, codprod: any) {
+  const raw = String(nome ?? '').trim();
+  if (raw && raw !== '.') return raw;
+  return `Produto ${codprod}`;
+}
+
 export const listarProdutos = async (req: any, res: any) => {
   try {
     const page = Math.max(1, Number(req.query.page || 1));
@@ -57,21 +63,14 @@ export const listarProdutos = async (req: any, res: any) => {
               P.CODPROD,
               P.CODAUXILIAR,
               NVL(P.NOMEECOMMERCE, P.DESCRICAO) AS NOME,
-              /* Se for necessário mais tarde:
-                 dbms_lob.substr(P.DADOSTECNICOS, 4000, 1) AS DADOSTECNICOS,
-              */
+              P.DESCRICAO                      AS DESC_ORIG,
               P.EMBALAGEM,
-              P.DIRFOTOPROD          AS DIRFOTO,
-              MIN(NVL(I.PTABELA, 0)) AS PRECO
+              P.DIRFOTOPROD                    AS DIRFOTO,
+              MIN(NVL(I.PTABELA, 0))           AS PRECO
             FROM PCPRODUT P
             JOIN PCCONTRATOI I ON I.CODPROD = P.CODPROD
             JOIN PCCONTRATO  C ON C.CODCONTRATO = I.CODCONTRATO
-            JOIN PCCLIENT   CLI ON CLI.CODCLI = C.CODCLI
-            /* Joins extras do script do seu chefe (não usados agora, mas mantidos para compatibilidade):
-               JOIN PCMARCA        M   ON P.CODMARCA = M.CODMARCA
-               LEFT JOIN PCCATEGORIA    CAT ON P.CODCATEGORIA = CAT.CODCATEGORIA
-               LEFT JOIN PCSUBCATEGORIA SUB ON P.CODSUBCATEGORIA = SUB.CODSUBCATEGORIA
-            */
+            JOIN PCCLIENT   CLI ON CLI.CODCLI   = C.CODCLI
             WHERE ${where}
             GROUP BY
               P.CODPROD, P.CODAUXILIAR, P.NOMEECOMMERCE, P.DESCRICAO,
@@ -79,29 +78,34 @@ export const listarProdutos = async (req: any, res: any) => {
           ),
           Paged AS (
             SELECT
-              CODPROD, CODAUXILIAR, NOME, PRECO, EMBALAGEM, DIRFOTO,
+              CODPROD, CODAUXILIAR, NOME, DESC_ORIG, PRECO, EMBALAGEM, DIRFOTO,
               ROW_NUMBER() OVER (ORDER BY NOME) AS RN
             FROM ProductBase
           )
-          SELECT CODPROD, CODAUXILIAR, NOME, PRECO, EMBALAGEM, DIRFOTO
+          SELECT CODPROD, CODAUXILIAR, NOME, DESC_ORIG, PRECO, EMBALAGEM, DIRFOTO
           FROM Paged
           WHERE RN BETWEEN :pStart AND :pEnd
         `;
 
         const result = await connection.execute(sql, binds, {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchArraySize: 100,
+          fetchArraySize: 200,
         });
 
-        return (result.rows || []).map((row: any) => ({
-          id: row.CODPROD,
-          codigoAuxiliar: row.CODAUXILIAR,
-          nome: row.NOME,
-          preco: row.PRECO,
-          unit: row.EMBALAGEM,
-          descricao: `Descrição para ${row.NOME}`,
-          imgUrl: toImageUrl(row.DIRFOTO, row.CODPROD),
-        }));
+        return (result.rows || []).map((row: any) => {
+          const nome = safeName(row.NOME, row.CODPROD);
+          const descricao = String(row.DESC_ORIG || nome || '').trim();
+          return {
+            id: row.CODPROD,
+            codigoAuxiliar: row.CODAUXILIAR,
+            nome,
+            preco: Number(row.PRECO || 0),
+            unit: row.EMBALAGEM || '',
+            descricao,
+            imgUrl: toImageUrl(row.DIRFOTO, row.CODPROD),
+            brand: null // opcional no frontend
+          };
+        });
       });
 
       produtosCache.set(cacheKey, { at: Date.now(), data: items });
@@ -173,11 +177,12 @@ export async function getProdutoDetalhe(req: any, res: any) {
       return {
         id: r.CODPROD,
         codigoAuxiliar: r.CODAUXILIAR,
-        nome: r.NOME,
+        nome: safeName(r.NOME, r.CODPROD),
         descricaoTecnica: r.DADOSTECNICOS || '',
         preco: Number(r.PRECO || 0),
         embalagem: r.EMBALAGEM || '',
         imgUrl: toImageUrl(r.DIRFOTO, r.CODPROD),
+        marca: null // removido join; mantém compat
       };
     });
 
@@ -229,8 +234,8 @@ export async function getProdutosProximos(req: any, res: any) {
         FROM Paged p
         CROSS JOIN Curr c
         WHERE p.RN IN (
-          MOD(c.RN    , c.TOTAL) + 1,  -- próximo
-          MOD(c.RN + 1, c.TOTAL) + 1   -- próximo do próximo
+          MOD(c.RN    , c.TOTAL) + 1,
+          MOD(c.RN + 1, c.TOTAL) + 1
         )
         ORDER BY p.RN
       `;
@@ -241,7 +246,7 @@ export async function getProdutosProximos(req: any, res: any) {
       return (r.rows || []).map((row: any) => ({
         id: row.CODPROD,
         codigoAuxiliar: row.CODAUXILIAR,
-        nome: row.NOME,
+        nome: safeName(row.NOME, row.CODPROD),
         preco: Number(row.PRECO || 0),
         unit: row.EMBALAGEM || '',
         imgUrl: toImageUrl(row.DIRFOTO, row.CODPROD),

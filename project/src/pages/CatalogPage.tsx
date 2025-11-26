@@ -29,6 +29,8 @@ const CatalogPage: React.FC = () => {
   const getCategory = (p: any) =>
     String(p?.categoria ?? p?.category ?? p?.categoriaNome ?? p?.grupo ?? p?.setor ?? '');
   const getPrice = (p: any) => Number(p?.preco ?? p?.price ?? 0);
+  const getBrand = (p: any) => String(p?.brand ?? p?.marca ?? '');
+  const getUnit = (p: any) => String(p?.unit ?? p?.unidade ?? '');
 
   async function load(opts?: { page?: number; pageSize?: number; q?: string; category?: string; sort?: SortKey }) {
     const pg = opts?.page ?? page;
@@ -116,7 +118,7 @@ const CatalogPage: React.FC = () => {
     const term = searchTerm.trim().toLowerCase();
     if (term) {
       list = list.filter(p => {
-        const fields = [getName(p), getDesc(p), getCategory(p)];
+        const fields = [getName(p), getDesc(p), getCategory(p), getBrand(p), getUnit(p)];
         return fields.some(f => f.toLowerCase().includes(term));
       });
     }
@@ -145,7 +147,7 @@ const CatalogPage: React.FC = () => {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Buscar por nome, descrição ou categoria..."
+              placeholder="Buscar por nome, descrição, marca ou categoria..."
               className="pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-[260px]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

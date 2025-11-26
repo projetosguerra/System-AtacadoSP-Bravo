@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingCart, CheckCircle, Minus, Plus } from 'lucide-react';
+import { ShoppingCart, CheckCircle, Minus, Plus, Tag } from 'lucide-react';
 import { Product } from '../types';
 import { Link } from 'react-router-dom';
 
@@ -15,13 +15,16 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
     const handleAddToCart = () => {
         onAddToCart(product, quantidade);
         setAdded(true);
-        setTimeout(() => {
-            setAdded(false);
-        }, 3000);
+        setTimeout(() => setAdded(false), 3000);
     };
 
-    const formatPrice = (price: number) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
+    const formatPrice = (price: number) =>
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
+
+    const safeName = (n?: string) => {
+      const x = String(n ?? '').trim();
+      if (!!x && x !== '.') return x;
+      return product.brand ? `Produto ${product.brand}` : `Produto ${product.id}`;
     };
 
     return (
@@ -30,15 +33,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
                 <div className="relative h-44 md:h-52 lg:h-60 bg-white rounded-t-xl overflow-hidden flex items-center justify-center">
                     <img
                         src={product.imgUrl}
-                        alt={product.nome}
+                        alt={safeName(product.nome)}
                         loading="lazy"
                         decoding="async"
                         className="max-h-full max-w-full object-contain p-3"
                         onError={(e) => {
                             const el = e.currentTarget as HTMLImageElement;
-                            el.onerror = null; 
+                            el.onerror = null;
                             el.src = `https://placehold.co/600x400/ffffff/cccccc?text=${encodeURIComponent(
-                                product.nome?.slice(0, 32) || `Produto ${product.id}`
+                                safeName(product.nome).slice(0, 32)
                             )}`;
                         }}
                     />
@@ -48,9 +51,23 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
             <div className="p-5 flex flex-col flex-grow">
                 <div className="flex-grow">
                     <Link to={`/produtos/${product.id}`} className="hover:underline">
-                        <h3 className="text-base font-semibold text-gray-900 line-clamp-2">{product.nome}</h3>
+                        <h3 className="text-base font-semibold text-gray-900 line-clamp-2">{safeName(product.nome)}</h3>
                     </Link>
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">{product.descricao}</p>
+
+                    {/* Marca e Unidade */}
+                    <div className="mt-1 flex items-center gap-2 text-xs text-gray-600">
+                        {product.brand && (
+                          <span className="inline-flex items-center gap-1">
+                            <Tag className="w-3 h-3" /> {product.brand}
+                          </span>
+                        )}
+                        {product.unit && <span className="text-gray-500">• Unid.: {product.unit}</span>}
+                    </div>
+
+                    {/* Descrição curta com clamp */}
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
+                      {product.descricao || 'Sem descrição.'}
+                    </p>
                 </div>
 
                 <div className="space-y-4">
