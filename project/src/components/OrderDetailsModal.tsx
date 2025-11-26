@@ -6,6 +6,8 @@ import PedidoTimeline from './PedidoTimeline';
 import { EdicaoResumo } from './EdicaoResumo';
 import ContestModal from './ContestModal';
 import ContestReviewPanel from './ContestReviewPanel';
+import AtesteModal from './AtesteModal';
+import SatisfacaoModal from './SatisfacaoModal';
 import { fetchContestes } from '../api/conteste';
 import { useAuth } from '../context/AuthContext';
 
@@ -77,7 +79,6 @@ const badgeClassByContesteStatus: Record<number, string> = {
   9: 'bg-gray-200 text-gray-700'
 };
 
-
 const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, onClose }) => {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -85,7 +86,10 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   const [data, setData] = useState<PedidoDetalhe | null>(null);
   const [financeiro, setFinanceiro] = useState<any | null>(null);
   const [transportadora, setTransportadora] = useState<any | null>(null);
+  const [satisfacaoOpen, setSatisfacaoOpen] = useState(false);
+
   const [contestOpen, setContestOpen] = useState(false);
+  const [atesteOpen, setAtesteOpen] = useState(false);
 
   const [, setContestLoading] = useState(false);
   const [, setContestError] = useState<string | null>(null);
@@ -151,7 +155,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
     setContestLoading(true);
     setContestError(null);
     fetchContestes(data.id, token ?? undefined, ac3.signal)
-      .then(list => {
+      .then((list: string | any[]) => {
         const first = list && list.length ? list[0] : null;
         if (first) {
           setUltimoConteste({
@@ -167,7 +171,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
           setUltimoConteste(null);
         }
       })
-      .catch(err => {
+      .catch((err: { message: any; }) => {
         if (!ac3.signal.aborted) {
           setContestError(err?.message || 'Falha ao carregar conteste.');
           setUltimoConteste(null);
@@ -175,7 +179,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
       })
       .finally(() => { if (!ac3.signal.aborted) setContestLoading(false); });
     return () => ac3.abort();
-  }, [open, data]);
+  }, [open, data, token]);
 
   const somaLocal = useMemo(() => {
     if (!data?.itens) return 0;
@@ -187,14 +191,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
   const dt = formatDateTime(data?.data);
   const statusText = data?.statusLabel || (data ? statusLabelFallback[data.status] : '');
   const divergencia = data && Math.abs(Number(data.valorTotal) - somaLocal) > 0.009;
-  
 
   const solicitanteId = data?.solicitante?.id;
   const usuarioLogadoId =
-  (user as any)?.codUsuario ??
-  (user as any)?.CODUSUARIO ??
-  (user as any)?.id ??
-  (user as any)?.ID;
+    (user as any)?.codUsuario ??
+    (user as any)?.CODUSUARIO ??
+    (user as any)?.id ??
+    (user as any)?.ID;
+
   const contesteStatusPedido = data?.contesteStatus;
   const contesteEmAndamento = contesteStatusPedido === 1 || (ultimoConteste && [1, 2].includes(ultimoConteste.status));
   const canContest =
@@ -205,8 +209,16 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
     !contesteEmAndamento &&
     !ultimoConteste;
 
+  const pedidoAprovado = data?.status === 1;
+  const semAteste = !(data as any)?.atesteResumo;
+  const canAtestar = pedidoAprovado && semAteste && solicitanteId && usuarioLogadoId && solicitanteId === usuarioLogadoId;
+
   const showContesteBadge = !!ultimoConteste;
   const badgeStatus = ultimoConteste?.status;
+
+  const temAteste = !!(data as any)?.atesteResumo;
+  const temSatisfacao = !!(data as any)?.satisfacaoResumo;
+  const podeAvaliar = temAteste && !temSatisfacao && solicitanteId === usuarioLogadoId;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -226,8 +238,26 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 {contesteStatusLabel[badgeStatus] || `Conteste (${badgeStatus})`}
               </span>
             )}
+            {(data as any)?.atesteResumo && (
+              <span
+                className={`px-2 py-1 rounded text-xs font-medium ${(data as any).atesteResumo.recebidoOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}
+                title={(data as any).atesteResumo.comentario || undefined}
+              >
+                Ateste: {(data as any).atesteResumo.recebidoOk ? 'Recebido OK' : 'Com divergências'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            {canAtestar && (
+              <button
+                onClick={() => setAtesteOpen(true)}
+                className="px-3 py-1.5 rounded bg-green-600 text-white text-sm hover:bg-green-700"
+                title="Confirmar recebimento deste pedido"
+              >
+                Atestar recebimento
+              </button>
+            )}
             {canContest && (
               <button
                 onClick={() => setContestOpen(true)}
@@ -235,6 +265,15 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                 title="Contestar reprovação deste pedido"
               >
                 Contestar
+              </button>
+            )}
+            {podeAvaliar && (
+              <button
+                onClick={() => setSatisfacaoOpen(true)}
+                className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
+                title="Avaliar satisfação do recebimento"
+              >
+                Avaliar recebimento
               </button>
             )}
             <button onClick={onClose} className="p-2 rounded hover:bg-gray-100" aria-label="Fechar">
@@ -252,7 +291,16 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
             <div className="text-sm text-red-600">Erro: {erro}</div>
           )}
 
-          {/* Aviso de conteste em andamento (quando reprovado) */}
+          {temSatisfacao && (
+            <div className="p-3 rounded-md bg-blue-50 border border-blue-200 text-sm text-blue-800">
+              <strong>Satisfação do recebimento:</strong> Nota {(data as any).satisfacaoResumo?.rating ?? '-'}
+              {(data as any).satisfacaoResumo?.comentario && (
+                <div className="mt-1 text-xs"><strong>Comentário:</strong> {(data as any).satisfacaoResumo?.comentario}</div>
+              )}
+            </div>
+          )}
+
+          {/* Aviso de conteste em andamento */}
           {data?.status === 2 && contesteEmAndamento && (
             <div className="p-3 rounded-md bg-yellow-50 border border-yellow-200 text-xs text-yellow-800">
               Há uma contestação em andamento para este pedido.
@@ -329,7 +377,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
                   pedidoId={data.id}
                   onDone={() => {
                     fetchPedidoDetalhe(data.id).then(setData).catch(() => { });
-                    fetchContestes(data.id, token ?? undefined).then(list => {
+                    fetchContestes(data.id, token ?? undefined).then((list: string | any[]) => {
                       const first = list && list.length ? list[0] : null;
                       setUltimoConteste(first ? {
                         id: first.id,
@@ -564,6 +612,30 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ open, pedidoId, o
         motivoReprovacao={(data as any)?.reprovacaoMotivo}
         onCreated={() => {
           setContestOpen(false);
+          if (pedidoId != null) {
+            fetchPedidoDetalhe(pedidoId).then(setData).catch(() => { });
+          }
+        }}
+      />
+
+      <AtesteModal
+        open={atesteOpen}
+        onClose={() => setAtesteOpen(false)}
+        pedidoId={data?.id || (pedidoId as number)}
+        onCreated={() => {
+          setAtesteOpen(false);
+          if (pedidoId != null) {
+            fetchPedidoDetalhe(pedidoId).then(setData).catch(() => { });
+          }
+        }}
+      />
+
+      <SatisfacaoModal
+        open={satisfacaoOpen}
+        onClose={() => setSatisfacaoOpen(false)}
+        pedidoId={data?.id || (pedidoId as number)}
+        onCreated={() => {
+          setSatisfacaoOpen(false);
           if (pedidoId != null) {
             fetchPedidoDetalhe(pedidoId).then(setData).catch(() => { });
           }

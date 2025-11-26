@@ -309,7 +309,7 @@ export const obterPedido = async (req: any, res: any) => {
       for (let i = eventos.length - 1; i >= 0; i--) {
         const ev = eventos[i];
         if (String(ev.tipo || '').toUpperCase() === 'REPROVACAO') {
-          const parsed = safeParseJson(ev.detalheJson);
+          const parsed = JSON.parse(ev.detalheJson || 'null');
           if (parsed && parsed.motivo) {
             reprovacaoMotivo = String(parsed.motivo);
           } else if (ev.detalheJson && typeof ev.detalheJson === 'string') {
@@ -319,6 +319,7 @@ export const obterPedido = async (req: any, res: any) => {
         }
       }
 
+      // Conteste resumo (converter CLOB)
       let contesteResumo: any = null;
       try {
         const contR = await connection.execute(
@@ -335,13 +336,13 @@ export const obterPedido = async (req: any, res: any) => {
             id: row.ID,
             status: row.STATUS,
             justificativa: await clobToString(row.JUSTIFICATIVA),
-            motivoReprovacao: row.MOTIVO_REPROVACAO, // VARCHAR2 já é string
+            motivoReprovacao: row.MOTIVO_REPROVACAO,
             parecer: await clobToString(row.PARECER),
             dataCriacao: row.DATA_CRIACAO,
             dataAnalise: row.DATA_ANALISE
           };
         }
-      } catch { /* ignora erros */ }
+      } catch { /* ignore */ }
 
       const aprovador = h.APROVADOR_ID ? {
         id: h.APROVADOR_ID,
@@ -362,6 +363,100 @@ export const obterPedido = async (req: any, res: any) => {
         );
         contesteStatus = Number((csR.rows?.[0] as any)?.CONTESTE_STATUS ?? 0);
       } catch { }
+
+      let statusOperacional: string | null = null;
+      let posicaoRaw: string | null = null;
+      let entregue = false;
+      let financeiroPago = false;
+      let financeiroEmAberto = false;
+
+      try {
+        const opR = await connection.execute(
+          `SELECT POSICAO, DTENTREGA
+             FROM PCPEDC
+            WHERE NUMPEDRCA = :id`,
+          { id: num },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        const opRow: any = opR.rows?.[0];
+        if (opRow) {
+          posicaoRaw = opRow.POSICAO;
+          const pos = String(opRow.POSICAO || '').toUpperCase();
+          if (pos === 'F') statusOperacional = 'FATURADO';
+          else if (pos === 'C') statusOperacional = 'CANCELADO';
+          else statusOperacional = 'EM_CONFERENCIA';
+          if (opRow.DTENTREGA) entregue = true;
+        }
+
+        const finR = await connection.execute(
+          `SELECT COUNT(*) AS TOTAL,
+                  SUM(CASE WHEN R.DTPAG IS NOT NULL THEN 1 ELSE 0 END) AS QUITADAS
+             FROM PCPREST R
+             JOIN PCPEDC C ON C.NUMPED = R.NUMPED
+            WHERE NVL(C.NUMPEDRCA,0) = :id`,
+          { id: num },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+        const finRow: any = finR.rows?.[0];
+        if (finRow) {
+          const total = Number(finRow.TOTAL || 0);
+          const quitadas = Number(finRow.QUITADAS || 0);
+          financeiroPago = total > 0 && quitadas === total;
+          financeiroEmAberto = total > 0 && quitadas < total;
+        }
+      } catch { /* schema não disponível */ }
+
+      let atesteResumo: any = null;
+      try {
+        const atR = await connection.execute(
+          `SELECT ID, RECEBIDO_OK, DATA_ATESTE, COMENTARIO
+             FROM BRAMV_ATESTE
+            WHERE NUMPEDRCA = :id
+            ORDER BY DATA_ATESTE DESC, ID DESC`,
+          { id: num },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 3 }
+        );
+        const aRow: any = atR.rows?.[0];
+        if (aRow) {
+          atesteResumo = {
+            id: aRow.ID,
+            recebidoOk: Number(aRow.RECEBIDO_OK) === 1,
+            dataAteste: aRow.DATA_ATESTE,
+            comentario: aRow.COMENTARIO
+          };
+        }
+      } catch { }
+
+      let satisfacaoResumo: any = null;
+      try {
+        const satR = await connection.execute(
+          `SELECT DATA_EVENTO, DETALHE_JSON
+            FROM BRAMV_PEDIDO_EVENTO
+            WHERE NUMPEDRCA = :id AND UPPER(TIPO) = 'PESQUISA_SATISFACAO'
+            ORDER BY DATA_EVENTO DESC, IDEVENTO DESC`,
+          { id: num },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 3 }
+        );
+        const sRow: any = satR.rows?.[0];
+        if (sRow) {
+          let rating: number | null = null;
+          let comentario: string | null = null;
+          try {
+            const json = typeof sRow.DETALHE_JSON === 'string'
+              ? JSON.parse(sRow.DETALHE_JSON)
+              : sRow.DETALHE_JSON;
+            rating = Number(json?.rating ?? null);
+            comentario = json?.comentario ?? null;
+          } catch {
+            comentario = typeof sRow.DETALHE_JSON === 'string' ? sRow.DETALHE_JSON : null;
+          }
+          satisfacaoResumo = {
+            data: sRow.DATA_EVENTO,
+            rating,
+            comentario
+          };
+        }
+      } catch { /* ignore */ }
 
       return {
         id: h.NUMPEDRCA,
@@ -388,7 +483,14 @@ export const obterPedido = async (req: any, res: any) => {
         editavel,
         contesteStatus: contesteStatus && [1, 2, 3, 4, 9].includes(contesteStatus) ? contesteStatus : null,
         reprovacaoMotivo,
-        contesteResumo
+        contesteResumo,
+        statusOperacional,
+        posicaoRaw,
+        entregue,
+        financeiroPago,
+        financeiroEmAberto,
+        atesteResumo,
+        satisfacaoResumo
       };
     });
 
@@ -818,34 +920,6 @@ function safeParseJson(detalheJson: any): any | null {
   } catch {
     return null;
   }
-}
-
-function readUserScopeLoose(u: any): { perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE'; codSetor?: number; codUsuario?: number } {
-  const rawPerfil =
-    u?.perfil ?? u?.role ?? u?.perfilUsuario ?? u?.tipoPerfil ?? u?.tipo ?? '';
-  const perfilUp = String(rawPerfil).trim().toUpperCase();
-  const tipoNum = Number(u?.tipoUsuario ?? u?.tipo ?? NaN);
-
-  let perfil: 'ADMIN' | 'APROVADOR' | 'SOLICITANTE';
-  if (['ADMIN', 'APROVADOR', 'SOLICITANTE'].includes(perfilUp)) {
-    perfil = perfilUp as any;
-  } else if (Number.isFinite(tipoNum)) {
-    perfil = (tipoNum === 1 ? 'ADMIN' : tipoNum === 2 ? 'APROVADOR' : 'SOLICITANTE');
-  } else {
-    // fallback: melhor ser APROVADOR para não dar acesso indevido de Admin
-    perfil = 'APROVADOR';
-  }
-
-  const codSetorRaw =
-    u?.codSetor ?? u?.codsetor ?? u?.CODSETOR ?? u?.setorId ?? u?.COD_SETOR;
-  const codSetor = Number(codSetorRaw);
-  const codUsuarioRaw = u?.codUsuario ?? u?.CODUSUARIO ?? u?.userId;
-  const codUsuario = Number(codUsuarioRaw);
-
-  const scope: any = { perfil };
-  if (Number.isFinite(codSetor)) scope.codSetor = codSetor;
-  if (Number.isFinite(codUsuario)) scope.codUsuario = codUsuario;
-  return scope;
 }
 
 export const editarItensPedido = async (req: any, res: any) => {

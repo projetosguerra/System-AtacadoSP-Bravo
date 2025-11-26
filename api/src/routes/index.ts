@@ -10,6 +10,8 @@ import financeiro from './financeiro.js';
 import dev from './dev.js';
 import health from './health.js';
 import conteste from './conteste.js';
+import ateste from './ateste.js';
+import satisfacao from './satisfacao.js';
 import { poolGate } from '../middleware/poolGate.js';
 
 const router = Router();
@@ -31,8 +33,9 @@ router.use(carrinho);
 router.use(usuarios);
 router.use(setores);
 router.use(financeiro);
-
 router.use(conteste);
+router.use(ateste);
+router.use(satisfacao);
 
 router.use(dev);
 
