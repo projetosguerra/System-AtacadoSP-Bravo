@@ -77,7 +77,6 @@ const Header = () => {
         </div>
       </div>
 
-      {/* Right actions */}
       <div className="flex items-center gap-3 sm:gap-4 lg:gap-6">
         {/* Carrinho */}
         <Link

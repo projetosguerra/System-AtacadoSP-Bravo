@@ -28,7 +28,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [tipousuario, setTipousuario] = useState<number>(3); // 3 = Solicitante por padrão
+  const [tipousuario, setTipousuario] = useState<number>(3); // 3 = Padrao: Solicitante
   const [codsetor, setCodsetor] = useState<number | ''>('');
   const [setores, setSetores] = useState<Setor[]>([]);
   const [isLoading, setIsLoading] = useState(false);

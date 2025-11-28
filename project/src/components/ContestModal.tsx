@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { createConteste } from '../api/conteste';
-import { useAuth } from '../context/AuthContext'; // importar contexto
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
   open: boolean;

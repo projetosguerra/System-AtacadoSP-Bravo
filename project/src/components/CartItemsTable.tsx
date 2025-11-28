@@ -1,4 +1,3 @@
-// Versão com tamanhos proporcionais e equilibrados
 import React from 'react';
 import { Minus, Plus, Trash2, Package } from 'lucide-react';
 import { CartItem } from '../types';
@@ -104,7 +103,7 @@ const CartItemsTable: React.FC<CartItemsTableProps> = ({
                 })}
             </div>
 
-            {/* Layout em tabela para desktop - PROPORÇÕES AJUSTADAS */}
+            {/* Tabela */}
             <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">

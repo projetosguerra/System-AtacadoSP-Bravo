@@ -44,6 +44,7 @@ export default function ConcatModal({
   const [selected, setSelected] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Nao sei porque isso foi tao dificil
   useEffect(() => {
     if (!isOpen) return;
     setError(null);

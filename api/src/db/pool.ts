@@ -5,8 +5,8 @@ let pool: oracledb.Pool | null = null;
 const POOL_MIN = Number(process.env.DB_POOL_MIN ?? 0);
 const POOL_MAX = Number(process.env.DB_POOL_MAX ?? 20);
 const POOL_INC = Number(process.env.DB_POOL_INC ?? 1);
-const POOL_TIMEOUT = Number(process.env.DB_POOL_TIMEOUT ?? 60); // seconds
-const QUEUE_TIMEOUT = Number(process.env.DB_QUEUE_TIMEOUT ?? 10_000); // ms
+const POOL_TIMEOUT = Number(process.env.DB_POOL_TIMEOUT ?? 60);
+const QUEUE_TIMEOUT = Number(process.env.DB_QUEUE_TIMEOUT ?? 10_000);
 const STMT_CACHE = Number(process.env.DB_STMT_CACHE ?? 100);
 
 let warnedCallTimeout = false;

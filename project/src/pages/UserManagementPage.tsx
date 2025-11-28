@@ -11,7 +11,7 @@ export const UserManagementPage = () => {
   const [filterValue, setFilterValue] = useState('Todos');
   const [unitFilter, setUnitFilter] = useState('Todas');
   const [isAddModalOpen, setAddModalOpen] = useState(false);
-  const [isDetailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [, setDetailsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentPage] = useState(1);
   const [isLoading, setLoading] = useState(true);

@@ -1,4 +1,3 @@
-// Versão totalmente responsiva com melhor visualização em todos os dispositivos
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ShoppingBag } from 'lucide-react';
@@ -83,7 +82,7 @@ const CartPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Área principal da tabela - 8 colunas */}
+            {/* Área principal da tabela */}
             <div className="lg:col-span-8">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200">

@@ -53,10 +53,6 @@ export const obterFinanceiro = async (req: any, res: any) => {
   }
 };
 
-/**
- * NOVO: gastos de um setor específico (sem filtrar por CODCLI).
- * Calcula o valor gasto por um setor (CODSETOR) na janela solicitada.
- */
 export const obterFinanceiroSetor = async (req: any, res: any) => {
   const codSetor = Number(req.params.codSetor);
   if (!Number.isFinite(codSetor)) return res.status(400).json({ error: 'codSetor inválido' });

@@ -10,13 +10,11 @@ import { useAuth } from '../context/AuthContext';
 
 const toNumber = (x: any) => (Number.isFinite(Number(x)) ? Number(x) : 0);
 
-// Helper para extrair a sigla antes do " - "
 function extractSigla(text?: string | null) {
   if (!text) return '';
   const t = String(text).trim();
   const dash = t.indexOf(' - ');
   if (dash > 0) return t.substring(0, dash).trim();
-  // fallback: primeira palavra
   return t.split(' ')[0].trim();
 }
 
@@ -38,7 +36,6 @@ const ApprovalPanelPage = () => {
 
   const [showFilters, setShowFilters] = useState(false);
   const [days, setDays] = useState<number>(30);
-  // selectedSetorId é CODSETOR (string)
   const [selectedSetorId, setSelectedSetorId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<PedidoPendente[]>(ctxPendentes || []);
@@ -83,7 +80,6 @@ const ApprovalPanelPage = () => {
     }
   }, [location.state, days]);
 
-  // Ajuste do filtro para ADMIN: filtra pelo CODSETOR selecionado comparando com a descrição/sigla do pedido.
   const scopedList = useMemo(() => {
     if (isAdmin) {
       if (!selectedSetorId) return list || [];
@@ -100,7 +96,6 @@ const ApprovalPanelPage = () => {
       });
     }
     if (!userUnitName) return list || [];
-    // Para não-admin, já estava filtrando corretamente
     const userSigla = extractSigla(userUnitName);
     return (list || []).filter(p => {
       const ua = (p.unidadeAdmin || '').trim();

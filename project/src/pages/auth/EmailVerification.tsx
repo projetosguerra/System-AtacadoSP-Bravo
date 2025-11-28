@@ -17,13 +17,12 @@ export const EmailVerification: React.FC<EmailVerificationProps> = ({
   const [isResending, setIsResending] = useState(false);
 
   const handleCodeChange = (index: number, value: string) => {
-    if (value.length > 1) return; // Only allow single digit
+    if (value.length > 1) return; 
     
     const newCode = [...code];
     newCode[index] = value;
     setCode(newCode);
 
-    // Auto-focus next input
     if (value && index < 5) {
       const nextInput = document.getElementById(`code-${index + 1}`);
       nextInput?.focus();
@@ -45,7 +44,6 @@ export const EmailVerification: React.FC<EmailVerificationProps> = ({
 
   const handleResend = async () => {
     setIsResending(true);
-    // Simulate API call
     setTimeout(() => {
       setIsResending(false);
     }, 2000);

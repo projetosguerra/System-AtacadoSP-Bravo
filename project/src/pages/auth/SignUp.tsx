@@ -77,7 +77,6 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateToSignIn }) => {
     if (!formData.codSetor) return 'Selecione um setor.';
     const cnpjDigits = formData.cnpj.replace(/\D/g,'');
     if (cnpjDigits.length !== 14) return 'CNPJ inválido (14 dígitos).';
-    // feedback visual opcional: comparar prefixo se setor tiver CNPJ (não confiável, mantemos backend)
     return null;
   }
 

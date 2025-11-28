@@ -231,7 +231,7 @@ export const createConcat = async (req: any, res: any) => {
       const codUsuario = toNum((rUser.rows?.[0] as any)?.CODUSUARIO, NaN);
       const createdBy = toNum(req.user?.codUsuario ?? null, NaN) || null;
 
-      // Cria pedido resultado
+      // vai criar pedido resultado
       await conn.execute(
         `INSERT INTO BRAMV_PEDIDOC
            (NUMPEDRCA, DATA, CODUSUARIO, STATUS, QTD_ITENS, VALOR_TOTAL,
@@ -242,21 +242,21 @@ export const createConcat = async (req: any, res: any) => {
         { id: newId, codUsuario, qtd: qtdItens, total, grp: newId, createdBy }
       );
 
-      // Itens agregados no resultado
+      // itens agregados no resultado
       await conn.executeMany(
         `INSERT INTO BRAMV_PEDIDOI (NUMPEDRCA, CODPROD, QT, PVENDA)
          VALUES (:id, :codprod, :qt, :pvenda)`,
         aggItems.map(it => ({ id: newId, codprod: it.codprod, qt: it.qt, pvenda: it.pvenda }))
       );
 
-      // Relacionamento de concatenação
+      // relacionamento de concat
       await conn.executeMany(
         `INSERT INTO BRAMV_PEDIDO_CONCAT_SRC (GRUPO_ID, PEDIDO_NOVO, PEDIDO_ORIGEM, CRIADO_POR)
          VALUES (:grp, :newId, :src, :createdBy)`,
         allIds.map(src => ({ grp: newId, newId, src, createdBy }))
       );
 
-      // Marca origens
+      // marca origens
       await conn.execute(
         `UPDATE BRAMV_PEDIDOC
             SET STATUS = 9,

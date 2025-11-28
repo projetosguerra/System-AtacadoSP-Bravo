@@ -38,7 +38,6 @@ const FinancialControlPage: React.FC = () => {
   const [isHistoryLoading, setHistoryLoading] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<ViewMode>('ONE');
 
-  // Utilidades de formatação
   const formatDate = (value: string) => {
     const d = new Date(value);
     if (isNaN(d.getTime())) return '—';
@@ -52,7 +51,6 @@ const FinancialControlPage: React.FC = () => {
   const currency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-  // Auto-seleciona setor do aprovador
   useEffect(() => {
     if (setores.length === 0) return;
     if (isAprovador) {
@@ -94,7 +92,6 @@ const FinancialControlPage: React.FC = () => {
     fetchDataForSetor();
   }, [fetchDataForSetor]);
 
-  // Visão agregada (usa dados do endpoint financeiro global)
   const allUnitsRows = useMemo(() => {
     return (setores || []).map((s) => {
       const gasto = financialData?. gastosPorSetor. find(g => String(g.CODSETOR) === String(s.CODSETOR))?.GASTO_TOTAL || 0;

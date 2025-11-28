@@ -151,7 +151,7 @@ const DashboardPage = () => {
   return (
     <main className="flex-1 overflow-x-hidden bg-gray-50">
       <div className="w-full space-y-6">
-        {/* Stats Cards - Grid Responsivo com melhor aproveitamento */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           <StatsCard
             title="Pedidos Pendentes"
@@ -187,13 +187,13 @@ const DashboardPage = () => {
           />
         </div>
 
-        {/* Charts - Grid Responsivo */}
+        {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <VolumeChart />
           <StatusChart />
         </div>
 
-        {/* Tabelas e Atividades - Grid Responsivo */}
+        {/* Tabelas e Atividades */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           <div className="lg:col-span-8">
             {canSeeApprovalTable ?  <QuickApprovalTable /> : <SectorOrdersTable />}
